@@ -1,15 +1,105 @@
-﻿using System;
+﻿#if NET40
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using NewLife;
 using NewLife.Serialization;
-//using BinaryReaderX = NewLife.Serialization.BinaryReaderX;
-//using BinaryWriterX = NewLife.Serialization.BinaryWriterX;
 
 namespace NewLife.Compression
 {
+    /// <summary>压缩文档模式</summary>
+    public enum ZipArchiveMode
+    {
+        /// <summary>读取</summary>
+        Read,
+
+        /// <summary>读取</summary>
+        Create,
+
+        /// <summary>读取</summary>
+        Update
+    }
+
+    /// <summary>压缩等级</summary>
+    public enum CompressionLevel
+    {
+        /// <summary>优化</summary>
+        Optimal,
+
+        /// <summary>最快</summary>
+        Fastest,
+
+        /// <summary>不压缩</summary>
+        NoCompression
+    }
+
+    /// <summary>压缩文件扩展</summary>
+    /// <remarks>
+    /// 文档 https://www.yuque.com/smartstone/nx/compression
+    /// </remarks>
+    public static class ZipFile
+    {
+        /// <summary>打开压缩文档</summary>
+        /// <param name="archiveFileName"></param>
+        /// <param name="mode"></param>
+        /// <param name="entryNameEncoding"></param>
+        /// <returns></returns>
+        public static ZipArchive Open(String archiveFileName, ZipArchiveMode mode, Encoding entryNameEncoding = null)
+        {
+            FileMode mode2;
+            FileAccess access;
+            FileShare share;
+            switch (mode)
+            {
+                case ZipArchiveMode.Read:
+                    mode2 = FileMode.Open;
+                    access = FileAccess.Read;
+                    share = FileShare.Read;
+                    break;
+                case ZipArchiveMode.Create:
+                    mode2 = FileMode.CreateNew;
+                    access = FileAccess.Write;
+                    share = FileShare.None;
+                    break;
+                case ZipArchiveMode.Update:
+                    mode2 = FileMode.OpenOrCreate;
+                    access = FileAccess.ReadWrite;
+                    share = FileShare.None;
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException("mode");
+            }
+            var fileStream = new FileStream(archiveFileName, mode2, access, share, 4096, useAsync: false);
+            try
+            {
+                return new ZipArchive(fileStream, entryNameEncoding);
+            }
+            catch
+            {
+                fileStream.Dispose();
+                throw;
+            }
+        }
+
+        /// <summary>从目录创建压缩文档</summary>
+        /// <param name="sourceDirectoryName"></param>
+        /// <param name="destinationArchiveFileName"></param>
+        /// <param name="compressionLevel"></param>
+        /// <param name="includeBaseDirectory"></param>
+        public static void CreateFromDirectory(String sourceDirectoryName, String destinationArchiveFileName, CompressionLevel compressionLevel, Boolean includeBaseDirectory)
+        {
+            if (String.IsNullOrEmpty(sourceDirectoryName)) throw new ArgumentNullException(nameof(sourceDirectoryName));
+            if (String.IsNullOrEmpty(destinationArchiveFileName)) destinationArchiveFileName = Path.ChangeExtension(Path.GetFileName(destinationArchiveFileName), ".zip");
+
+            using var zf = new ZipArchive();
+            zf.AddDirectory(sourceDirectoryName, null, compressionLevel == CompressionLevel.NoCompression);
+            zf.Write(destinationArchiveFileName);
+        }
+    }
+
     /// <summary>Zip文件</summary>
     /// <remarks>
     /// Zip定义位于 <a target="_blank" href="http://www.pkware.com/documents/casestudies/APPNOTE.TXT">http://www.pkware.com/documents/casestudies/APPNOTE.TXT</a>
@@ -27,7 +117,7 @@ namespace NewLife.Compression
     /// <example>
     /// 标准压缩：
     /// <code>
-    /// using (ZipFile zf = new ZipFile())
+    /// using (ZipArchive zf = new ZipArchive())
     /// {
     ///     zf.AddDirectory("TestZip");
     /// 
@@ -40,7 +130,7 @@ namespace NewLife.Compression
     /// 
     /// 标准解压缩：
     /// <code>
-    /// using (ZipFile zf = new ZipFile(file))
+    /// using (ZipArchive zf = new ZipArchive(file))
     /// {
     ///     zf.Extract("TestZip");
     /// }
@@ -48,59 +138,65 @@ namespace NewLife.Compression
     /// 
     /// 快速压缩：
     /// <code>
-    /// ZipFile.CompressFile("aa.doc");
-    /// ZipFile.CompressDirectory("TestZip");
+    /// ZipArchive.CompressFile("aa.doc");
+    /// ZipArchive.CompressDirectory("TestZip");
     /// </code>
     /// 
     /// 快速解压缩：
     /// <code>
-    /// ZipFile.Extract("aa.zip", "Test");
+    /// ZipArchive.Extract("aa.zip", "Test");
     /// </code>
     /// </example>
-    public partial class ZipFile : IDisposable, IEnumerable, IEnumerable<ZipEntry>
+    public partial class ZipArchive : IDisposable, IEnumerable, IEnumerable<ZipEntry>
     {
         #region 属性
-        private String _Name;
         /// <summary>名称</summary>
-        public String Name { get { return _Name; } set { _Name = value; } }
+        public String Name { get; set; }
 
-        private String _Comment;
         /// <summary>注释</summary>
-        public String Comment { get { EnsureRead(); return _Comment; } set { _Comment = value; } }
+        public String Comment { get; set; }
 
-        private Encoding _Encoding;
         /// <summary>字符串编码</summary>
-        public Encoding Encoding { get { return _Encoding ?? Encoding.Default; } set { _Encoding = value; } }
+        public Encoding Encoding { get; set; } = Encoding.UTF8;
 
-        private Boolean _UseDirectory;
         /// <summary>是否使用目录。不使用目录可以减少一点点文件大小，网络上的压缩包也这么做，但是Rar压缩的使用了目录</summary>
-        public Boolean UseDirectory { get { return _UseDirectory; } set { _UseDirectory = value; } }
+        public Boolean UseDirectory { get; set; }
 
-        private Int64 _EmbedFileDataMaxSize = 10 * 1024 * 1024;
         /// <summary>内嵌文件数据最大大小。小于该大小的文件将加载到内存中，否则保持文件流连接，直到读写文件。默认10M</summary>
-        public Int64 EmbedFileDataMaxSize { get { return _EmbedFileDataMaxSize; } set { _EmbedFileDataMaxSize = value; } }
+        public Int64 EmbedFileDataMaxSize { get; set; } = 10 * 1024 * 1024;
         #endregion
 
         #region 构造
         /// <summary>实例化一个Zip文件对象</summary>
-        public ZipFile() { }
+        public ZipArchive() { }
 
         /// <summary>实例化一个Zip文件对象。延迟到第一次使用<see cref="Entries"/>时读取</summary>
         /// <param name="fileName">文件名</param>
         /// <param name="encoding">字符串编码</param>
-        public ZipFile(String fileName, Encoding encoding = null)
+        public ZipArchive(String fileName, Encoding encoding = null)
         {
             Name = fileName;
-            Encoding = encoding;
+            if (encoding != null) Encoding = encoding;
             _file = fileName;
         }
 
         /// <summary>实例化一个Zip文件对象。延迟到第一次使用<see cref="Entries"/>时读取</summary>
         /// <param name="stream"></param>
         /// <param name="encoding"></param>
-        public ZipFile(Stream stream, Encoding encoding = null)
+        public ZipArchive(Stream stream, Encoding encoding = null)
         {
-            Encoding = encoding;
+            if (encoding != null) Encoding = encoding;
+            _stream = stream;
+        }
+
+        /// <summary>实例化Zip文档</summary>
+        /// <param name="stream"></param>
+        /// <param name="mode"></param>
+        /// <param name="leaveOpen"></param>
+        /// <param name="entryNameEncoding"></param>
+        public ZipArchive(Stream stream, ZipArchiveMode mode, Boolean leaveOpen, Encoding entryNameEncoding)
+        {
+            if (entryNameEncoding != null) Encoding = entryNameEncoding;
             _stream = stream;
         }
 
@@ -112,18 +208,18 @@ namespace NewLife.Compression
             if (entries != null && entries.Count > 0)
             {
                 // 是否所有实体，因为里面可能含有数据流
-                entries.Values.TryDispose();
+                entries.TryDispose();
                 entries.Clear();
             }
         }
         #endregion
 
         #region 读取
-        String _file;
-        Stream _stream;
+        private String _file;
+        private Stream _stream;
 
         /// <summary>使用文件和数据流时，延迟到第一次使用<see cref="Entries"/>时读取</summary>
-        void EnsureRead()
+        private void EnsureRead()
         {
             // 这里必须把_file=null这行注释，否则进不去，不知道为什么
             if (!_file.IsNullOrWhiteSpace())
@@ -131,19 +227,15 @@ namespace NewLife.Compression
                 var f = _file;
                 _file = null;
                 var fs = File.OpenRead(f);
-#if !DEBUG
                 try
-#endif
                 {
                     Read(fs);
                 }
-#if !DEBUG
                 catch (Exception ex)
                 {
                     fs.Dispose();
                     throw new ZipException("不是有效的Zip格式！", ex);
                 }
-#endif
 
                 if (fs.Length < EmbedFileDataMaxSize) fs.Dispose();
             }
@@ -174,7 +266,7 @@ namespace NewLife.Compression
             var embedfile = embedFileData ?? stream.Length < EmbedFileDataMaxSize;
 
             ZipEntry e;
-            bool firstEntry = true;
+            var firstEntry = true;
             while ((e = ZipEntry.ReadEntry(this, stream, firstEntry, embedfile)) != null)
             {
                 var name = e.FileName;
@@ -189,19 +281,21 @@ namespace NewLife.Compression
                         if (p <= 0) break;
 
                         dir = dir.Substring(0, p);
-                        if (!Entries.ContainsKey(dir + DirSeparator))
+                        if (!Entries.Any(x => x.FileName.EqualIgnoreCase(dir + DirSeparator)))
                         {
-                            var de = new ZipEntry();
-                            // 必须包含分隔符，因为这样才能被识别为目录
-                            de.FileName = dir + DirSeparator;
-                            Entries.Add(de.FileName, de);
+                            var de = new ZipEntry
+                            {
+                                // 必须包含分隔符，因为这样才能被识别为目录
+                                FileName = dir + DirSeparator
+                            };
+                            Entries.Add(de);
                         }
                     }
                 }
 
                 var n = 2;
-                while (Entries.ContainsKey(name)) { name = e.FileName + "" + n++; }
-                Entries.Add(name, e);
+                while (Entries.Any(x => x.FileName.EqualIgnoreCase(name))) { name = e.FileName + "" + n++; }
+                Entries.Add(e);
                 firstEntry = false;
 
                 if (!UseDirectory && e.IsDirectory) UseDirectory = true;
@@ -218,7 +312,7 @@ namespace NewLife.Compression
                     ZipEntry de;
                     while ((de = ZipEntry.ReadDirEntry(this, stream)) != null)
                     {
-                        e = Entries[de.FileName];
+                        e = Entries.FirstOrDefault(x => x.FileName.EqualIgnoreCase(de.FileName));
                         if (e != null)
                         {
                             //e.Comment = de.Comment;
@@ -265,20 +359,21 @@ namespace NewLife.Compression
             //// 写入文件头时忽略掉这些字段，这些都是DirEntry的字段
             //writer.Settings.IgnoreMembers = ZipEntry.dirMembers;
 
-            var handler = (writer as Binary).GetHandler<BinaryComposite>();
-            if (handler != null) handler.IgnoreMembers = ZipEntry.dirMembers;
+            if (writer is Binary bn) bn.IgnoreMembers = ZipEntry.dirMembers;
 
-            foreach (var item in Entries.Values)
+            foreach (var item in Entries)
             {
                 if (UseDirectory || !item.IsDirectory) item.Write(writer);
             }
 
-            var ecd = new EndOfCentralDirectory();
-            ecd.Offset = (UInt32)writer.Stream.Position;
+            var ecd = new EndOfCentralDirectory
+            {
+                Offset = (UInt32)writer.Stream.Position
+            };
 
             //writer.Settings.IgnoreMembers = null;
-            Int32 num = 0;
-            foreach (var item in Entries.Values)
+            var num = 0;
+            foreach (var item in Entries)
             {
                 // 每一个都需要写目录项
                 if (UseDirectory || !item.IsDirectory)
@@ -306,26 +401,8 @@ namespace NewLife.Compression
         {
             if (String.IsNullOrEmpty(fileName)) throw new ArgumentNullException("fileName");
 
-            //// 根据文件后缀决定采用的压缩算法
-            //var method = CompressionMethod.Stored;
-            //var ext = Path.GetExtension(fileName);
-            //if (ext == ".7z" || ext == ".lzma")
-            //    method = CompressionMethod.LZMA;
-            //else
-            //    method = CompressionMethod.Deflated;
-
-            //if (method != CompressionMethod.Stored)
-            //{
-            //    foreach (var item in Entries.Values)
-            //    {
-            //        item.CompressionMethod = method;
-            //    }
-            //}
-
-            using (var fs = File.Create(fileName))
-            {
-                Write(fs);
-            }
+            using var fs = File.Create(fileName);
+            Write(fs);
         }
         #endregion
 
@@ -338,15 +415,15 @@ namespace NewLife.Compression
         {
             if (String.IsNullOrEmpty(outputPath)) throw new ArgumentNullException("outputPath");
 
-            foreach (var item in Entries.Values)
+            foreach (var item in Entries)
             {
                 if (throwException)
-                    item.Extract(outputPath, overrideExisting);
+                    item.ExtractToFile(outputPath, overrideExisting);
                 else
                 {
                     try
                     {
-                        item.Extract(outputPath, overrideExisting);
+                        item.ExtractToFile(outputPath, overrideExisting);
                     }
                     catch { }
                 }
@@ -358,17 +435,15 @@ namespace NewLife.Compression
         /// <param name="outputPath"></param>
         /// <param name="overrideExisting"></param>
         /// <param name="throwException"></param>
-        public static void Extract(String fileName, String outputPath, Boolean overrideExisting = true, Boolean throwException = true)
+        public static void ExtractToDirectory(String fileName, String outputPath, Boolean overrideExisting = true, Boolean throwException = true)
         {
-            if (String.IsNullOrEmpty(fileName)) throw new ArgumentNullException("fileName");
+            if (fileName.IsNullOrEmpty()) throw new ArgumentNullException(nameof(fileName));
             // 默认使用没有后缀的路径作为目录
-            if (String.IsNullOrEmpty(outputPath)) outputPath = Path.GetFileNameWithoutExtension(fileName);
-            if (String.IsNullOrEmpty(outputPath)) throw new ArgumentNullException("outputPath");
+            if (outputPath.IsNullOrEmpty()) outputPath = Path.GetDirectoryName(fileName);
+            if (outputPath.IsNullOrEmpty()) throw new ArgumentNullException(nameof(outputPath));
 
-            using (var zf = new ZipFile(fileName))
-            {
-                zf.Extract(outputPath, overrideExisting, throwException);
-            }
+            using var zf = new ZipArchive(fileName);
+            zf.Extract(outputPath, overrideExisting, throwException);
         }
         #endregion
 
@@ -377,9 +452,9 @@ namespace NewLife.Compression
         /// 必须指定文件路径<paramref name="fileName"/>，如果不指定实体名<paramref name="entryName"/>，则使用文件名，并加到顶级目录。</summary>
         /// <param name="fileName">文件路径</param>
         /// <param name="entryName">实体名</param>
-        /// <param name="stored">是否仅存储，不压缩</param>
+        /// <param name="level">压缩等级</param>
         /// <returns></returns>
-        public ZipEntry AddFile(String fileName, String entryName = null, Boolean? stored = false)
+        public ZipEntry CreateEntryFromFile(String fileName, String entryName = null, CompressionLevel level = CompressionLevel.Optimal)
         {
             if (String.IsNullOrEmpty(fileName)) throw new ArgumentNullException("fileName");
 
@@ -387,20 +462,33 @@ namespace NewLife.Compression
             entryName = entryName.Replace(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
             // 判断并添加目录
-            String dir = Path.GetDirectoryName(entryName);
+            var dir = Path.GetDirectoryName(entryName);
             if (!String.IsNullOrEmpty(dir))
             {
                 if (!dir.EndsWith(DirSeparator)) dir += DirSeparator;
-                if (!Entries.ContainsKey(dir))
+                if (!Entries.Any(x => x.FileName.EqualIgnoreCase(dir)))
                 {
-                    var zde = new ZipEntry();
-                    zde.FileName = dir;
-                    Entries.Add(dir, zde);
+                    var zde = new ZipEntry
+                    {
+                        FileName = dir
+                    };
+                    Entries.Add(zde);
                 }
             }
 
-            var entry = ZipEntry.Create(fileName, entryName, stored);
-            Entries.Add(entry.FileName, entry);
+            var entry = ZipEntry.Create(fileName, entryName, level == CompressionLevel.NoCompression);
+            Entries.Add(entry);
+
+            return entry;
+        }
+
+        /// <summary>创建压缩项</summary>
+        /// <param name="entryName"></param>
+        /// <returns></returns>
+        public ZipEntry CreateEntry(String entryName)
+        {
+            var entry = ZipEntry.Create(new MemoryStream(), entryName, false);
+            Entries.Add(entry);
 
             return entry;
         }
@@ -412,31 +500,32 @@ namespace NewLife.Compression
         /// <param name="stored">是否仅存储，不压缩</param>
         public void AddDirectory(String dirName, String entryName = null, Boolean? stored = null)
         {
-            if (String.IsNullOrEmpty(dirName)) throw new ArgumentNullException("fileName");
+            if (dirName.IsNullOrEmpty()) throw new ArgumentNullException(nameof(dirName));
             dirName = Path.GetFullPath(dirName);
 
-            if (!String.IsNullOrEmpty(entryName))
+            if (!entryName.IsNullOrEmpty())
             {
                 if (!entryName.EndsWith(DirSeparator)) entryName += DirSeparator;
                 var entry = ZipEntry.Create(null, entryName, true);
-                Entries.Add(entry.FileName, entry);
+                Entries.Add(entry);
             }
 
             // 所有文件
             foreach (var item in Directory.GetFiles(dirName, "*.*", SearchOption.TopDirectoryOnly))
             {
-                String name = item;
+                var name = item;
                 if (name.StartsWith(dirName)) name = name.Substring(dirName.Length);
                 if (name[0] == Path.DirectorySeparatorChar) name = name.Substring(1);
 
                 if (!String.IsNullOrEmpty(entryName)) name = entryName + name;
 
-                AddFile(item, name, stored);
+                var level = (stored != null && stored.Value) ? CompressionLevel.NoCompression : CompressionLevel.Optimal;
+                CreateEntryFromFile(item, name, level);
             }
 
             foreach (var item in Directory.GetDirectories(dirName, "*", SearchOption.TopDirectoryOnly))
             {
-                String name = item;
+                var name = item;
                 if (name.StartsWith(dirName)) name = name.Substring(dirName.Length);
                 if (name[0] == Path.DirectorySeparatorChar) name = name.Substring(1);
                 // 加上分隔符，表示目录
@@ -453,14 +542,12 @@ namespace NewLife.Compression
         /// <param name="outputName"></param>
         public static void CompressFile(String fileName, String outputName = null)
         {
-            if (String.IsNullOrEmpty(fileName)) throw new ArgumentNullException("fileName");
+            if (String.IsNullOrEmpty(fileName)) throw new ArgumentNullException(nameof(fileName));
             if (String.IsNullOrEmpty(outputName)) outputName = Path.ChangeExtension(fileName, ".zip");
 
-            using (ZipFile zf = new ZipFile())
-            {
-                zf.AddFile(fileName);
-                zf.Write(outputName);
-            }
+            using var zf = new ZipArchive();
+            zf.CreateEntryFromFile(fileName);
+            zf.Write(outputName);
         }
 
         /// <summary>快速压缩目录。</summary>
@@ -468,28 +555,27 @@ namespace NewLife.Compression
         /// <param name="outputName"></param>
         public static void CompressDirectory(String dirName, String outputName = null)
         {
-            if (String.IsNullOrEmpty(dirName)) throw new ArgumentNullException("dirName");
+            if (String.IsNullOrEmpty(dirName)) throw new ArgumentNullException(nameof(dirName));
             if (String.IsNullOrEmpty(outputName)) outputName = Path.ChangeExtension(Path.GetFileName(dirName), ".zip");
 
-            using (ZipFile zf = new ZipFile())
-            {
-                zf.AddDirectory(dirName);
-                zf.Write(outputName);
-            }
+            using var zf = new ZipArchive();
+            zf.AddDirectory(dirName);
+            zf.Write(outputName);
         }
         #endregion
 
         #region 索引集合
-        private Dictionary<String, ZipEntry> _Entries;
+        private IList<ZipEntry> _Entries;
         /// <summary>文件实体集合</summary>
-        public Dictionary<String, ZipEntry> Entries
+        public IList<ZipEntry> Entries
         {
             get
             {
                 // 不区分大小写
                 if (_Entries == null)
                 {
-                    _Entries = new Dictionary<String, ZipEntry>(StringComparer.OrdinalIgnoreCase);
+                    //_Entries = new Dictionary<String, ZipEntry>(StringComparer.OrdinalIgnoreCase);
+                    _Entries = new List<ZipEntry>();
 
                     // 第一次访问文件实体集合时，才去读取文件
                     EnsureRead();
@@ -498,42 +584,38 @@ namespace NewLife.Compression
             }
         }
 
-        /// <summary>返回指定索引处的实体</summary>
-        /// <param name="index"></param>
-        /// <returns></returns>
-        public ZipEntry this[Int32 index] { get { return Entries.Values.ElementAtOrDefault(index); } }
+        ///// <summary>返回指定索引处的实体</summary>
+        ///// <param name="index"></param>
+        ///// <returns></returns>
+        //public ZipEntry this[Int32 index] => Entries.Values.ElementAtOrDefault(index);
 
-        /// <summary>返回指定名称的实体</summary>
-        /// <param name="fileName"></param>
-        /// <returns></returns>
-        public ZipEntry this[String fileName]
-        {
-            get
-            {
-                var key = fileName;
-                key = key.Replace('\\', '/');
-                key = key.TrimStart('/');
-                var entries = Entries;
-                ZipEntry e = null;
-                if (entries.TryGetValue(key, out e)) return e;
+        ///// <summary>返回指定名称的实体</summary>
+        ///// <param name="fileName"></param>
+        ///// <returns></returns>
+        //public ZipEntry this[String fileName]
+        //{
+        //    get
+        //    {
+        //        var key = fileName;
+        //        key = key.Replace('\\', '/');
+        //        key = key.TrimStart('/');
+        //        var entries = Entries;
+        //        if (entries.TryGetValue(key, out var e)) return e;
 
-                key = key.Replace("/", "\\");
-                if (entries.TryGetValue(key, out e)) return e;
+        //        key = key.Replace("/", "\\");
+        //        if (entries.TryGetValue(key, out e)) return e;
 
-                return null;
-            }
-        }
+        //        return null;
+        //    }
+        //}
 
         /// <summary>实体个数</summary>
-        public Int32 Count { get { return Entries.Count; } }
+        public Int32 Count => Entries.Count;
         #endregion
 
         #region 辅助
         internal IFormatterX CreateReader(Stream stream)
         {
-#if DEBUG
-            //stream = new NewLife.Log.TraceStream(stream);
-#endif
             var bn = new Binary() { Stream = stream };
             bn.EncodeInt = false;
             bn.UseFieldSize = true;
@@ -541,18 +623,12 @@ namespace NewLife.Compression
             bn.SizeWidth = 2;
             bn.IsLittleEndian = true;
             bn.Encoding = Encoding;
-#if DEBUG
-            bn.Log = NewLife.Log.XTrace.Log;
-#endif
 
             return bn;
         }
 
         internal IFormatterX CreateWriter(Stream stream)
         {
-#if DEBUG
-            //stream = new NewLife.Log.TraceStream(stream);
-#endif
             var bn = new Binary() { Stream = stream };
             bn.EncodeInt = false;
             bn.UseFieldSize = true;
@@ -560,28 +636,25 @@ namespace NewLife.Compression
             bn.SizeWidth = 2;
             bn.IsLittleEndian = true;
             bn.Encoding = Encoding;
-#if DEBUG
-            bn.Log = NewLife.Log.XTrace.Log;
-#endif
 
             return bn;
         }
 
-        internal static readonly DateTime MinDateTime = new DateTime(1980, 1, 1);
+        internal static readonly DateTime MinDateTime = new(1980, 1, 1);
         internal static DateTime DosDateTimeToFileTime(Int32 value)
         {
             if (value <= 0) return MinDateTime;
 
-            Int16 time = (Int16)(value & 0x0000FFFF);
-            Int16 date = (Int16)((value & 0xFFFF0000) >> 16);
+            var time = (Int16)(value & 0x0000FFFF);
+            var date = (Int16)((value & 0xFFFF0000) >> 16);
 
-            int year = 1980 + ((date & 0xFE00) >> 9);
-            int month = (date & 0x01E0) >> 5;
-            int day = date & 0x001F;
+            var year = 1980 + ((date & 0xFE00) >> 9);
+            var month = (date & 0x01E0) >> 5;
+            var day = date & 0x001F;
 
-            int hour = (time & 0xF800) >> 11;
-            int minute = (time & 0x07E0) >> 5;
-            int second = (time & 0x001F) * 2;
+            var hour = (time & 0xF800) >> 11;
+            var minute = (time & 0x07E0) >> 5;
+            var second = (time & 0x001F) * 2;
 
             return new DateTime(year, month, day, hour, minute, second);
         }
@@ -590,60 +663,52 @@ namespace NewLife.Compression
         {
             if (value <= MinDateTime) value = MinDateTime;
 
-            Int32 date = (value.Year - 1980) << 9 | value.Month << 5 | value.Day;
-            Int32 time = value.Hour << 11 | value.Minute << 5 | value.Second / 2;
+            var date = (value.Year - 1980) << 9 | value.Month << 5 | value.Day;
+            var time = value.Hour << 11 | value.Minute << 5 | value.Second / 2;
 
             return date << 16 | time;
         }
 
-        internal readonly static String DirSeparator = Path.AltDirectorySeparatorChar.ToString();
+        internal static readonly String DirSeparator = Path.AltDirectorySeparatorChar.ToString();
 
         /// <summary>已重载。</summary>
         /// <returns></returns>
-        public override string ToString() { return String.Format("{0} [{1}]", Name, Entries.Count); }
+        public override String ToString() => $"{Name} [{Entries.Count}]";
         #endregion
 
         #region IEnumerable<ZipEntry> 成员
-        IEnumerator<ZipEntry> IEnumerable<ZipEntry>.GetEnumerator() { return Entries.Values.GetEnumerator(); }
+        IEnumerator<ZipEntry> IEnumerable<ZipEntry>.GetEnumerator() => Entries.GetEnumerator();
 
-        IEnumerator IEnumerable.GetEnumerator() { return Entries.Values.GetEnumerator(); }
+        IEnumerator IEnumerable.GetEnumerator() => Entries.GetEnumerator();
         #endregion
 
         #region CentralDirectory
-        class EndOfCentralDirectory
+        private class EndOfCentralDirectory
         {
             #region 属性
-            private UInt32 _Signature = ZipConstants.EndOfCentralDirectorySignature;
             /// <summary>签名。end of central dir signature</summary>
-            public UInt32 Signature { get { return _Signature; } set { _Signature = value; } }
+            public UInt32 Signature { get; set; } = ZipConstants.EndOfCentralDirectorySignature;
 
-            private UInt16 _DiskNumber;
             /// <summary>卷号。number of this disk</summary>
-            public UInt16 DiskNumber { get { return _DiskNumber; } set { _DiskNumber = value; } }
+            public UInt16 DiskNumber { get; set; }
 
-            private UInt16 _DiskNumberWithStart;
             /// <summary>number of the disk with the start of the central directory</summary>
-            public UInt16 DiskNumberWithStart { get { return _DiskNumberWithStart; } set { _DiskNumberWithStart = value; } }
+            public UInt16 DiskNumberWithStart { get; set; }
 
-            private UInt16 _NumberOfEntriesOnThisDisk;
             /// <summary>total number of entries in the central directory on this disk</summary>
-            public UInt16 NumberOfEntriesOnThisDisk { get { return _NumberOfEntriesOnThisDisk; } set { _NumberOfEntriesOnThisDisk = value; } }
+            public UInt16 NumberOfEntriesOnThisDisk { get; set; }
 
-            private UInt16 _NumberOfEntries;
             /// <summary>total number of entries in the central directory</summary>
-            public UInt16 NumberOfEntries { get { return _NumberOfEntries; } set { _NumberOfEntries = value; } }
+            public UInt16 NumberOfEntries { get; set; }
 
-            private UInt32 _Size;
             /// <summary>size of the central directory</summary>
-            public UInt32 Size { get { return _Size; } set { _Size = value; } }
+            public UInt32 Size { get; set; }
 
-            private UInt32 _Offset;
             /// <summary>offset of start of central directory with respect to the starting disk number</summary>
-            public UInt32 Offset { get { return _Offset; } set { _Offset = value; } }
+            public UInt32 Offset { get; set; }
 
-            private String _Comment;
             /// <summary>注释</summary>
-            public String Comment { get { return _Comment; } set { _Comment = value; } }
+            public String Comment { get; set; }
             #endregion
         }
         #endregion
@@ -766,3 +831,4 @@ namespace NewLife.Compression
 //            9-15 year (since 1980)
 //
 // see http://msdn.microsoft.com/en-us/library/ms724274(VS.85).aspx
+#endif

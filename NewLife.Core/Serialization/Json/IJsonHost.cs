@@ -1,336 +1,298 @@
-﻿using System;
-using System.Reflection;
-using System.Text;
-using System.Xml.Serialization;
-using NewLife.Log;
+﻿using NewLife.Collections;
 using NewLife.Reflection;
-#if NET4
-using System.Web.Script.Serialization;
+#if NET5_0_OR_GREATER
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Unicode;
 #endif
 
-namespace NewLife.Serialization
-{
-    /// <summary>Json序列化接口</summary>
-    public interface IJsonHost
-    {
-        /// <summary>写入对象，得到Json字符串</summary>
-        /// <param name="value"></param>
-        /// <param name="indented">是否缩进</param>
-        /// <returns></returns>
-        String Write(Object value, Boolean indented = false);
+namespace NewLife.Serialization;
 
-        /// <summary>从Json字符串中读取对象</summary>
-        /// <param name="json"></param>
-        /// <param name="type"></param>
-        /// <returns></returns>
-        Object Read(String json, Type type);
+/// <summary>Json序列化接口</summary>
+/// <remarks>
+/// 文档 https://newlifex.com/core/json
+/// </remarks>
+public interface IJsonHost
+{
+    /// <summary>写入对象，得到Json字符串</summary>
+    /// <param name="value"></param>
+    /// <param name="indented">是否缩进。默认false</param>
+    /// <param name="nullValue">是否写空值。默认true</param>
+    /// <param name="camelCase">是否驼峰命名。默认false</param>
+    /// <returns></returns>
+    String Write(Object value, Boolean indented = false, Boolean nullValue = true, Boolean camelCase = false);
+
+    /// <summary>从Json字符串中读取对象</summary>
+    /// <param name="json"></param>
+    /// <param name="type"></param>
+    /// <returns></returns>
+    Object Read(String json, Type type);
+
+    /// <summary>类型转换</summary>
+    /// <param name="obj"></param>
+    /// <param name="targetType"></param>
+    /// <returns></returns>
+    Object Convert(Object obj, Type targetType);
+
+    /// <summary>分析Json字符串得到字典</summary>
+    /// <param name="json"></param>
+    /// <returns></returns>
+    IDictionary<String, Object> Decode(String json);
+}
+
+/// <summary>Json助手</summary>
+/// <remarks>
+/// 文档 https://newlifex.com/core/json
+/// </remarks>
+public static class JsonHelper
+{
+    /// <summary>默认实现</summary>
+    public static IJsonHost Default { get; set; } = new FastJson();
+
+    /// <summary>写入对象，得到Json字符串</summary>
+    /// <param name="value"></param>
+    /// <param name="indented">是否缩进</param>
+    /// <returns></returns>
+    public static String ToJson(this Object value, Boolean indented = false) => Default.Write(value, indented);
+
+    /// <summary>写入对象，得到Json字符串</summary>
+    /// <param name="value"></param>
+    /// <param name="indented">是否换行缩进。默认false</param>
+    /// <param name="nullValue">是否写空值。默认true</param>
+    /// <param name="camelCase">是否驼峰命名。默认false</param>
+    /// <returns></returns>
+    public static String ToJson(this Object value, Boolean indented, Boolean nullValue, Boolean camelCase) => Default.Write(value, indented, nullValue, camelCase);
+
+    /// <summary>从Json字符串中读取对象</summary>
+    /// <param name="json"></param>
+    /// <param name="type"></param>
+    /// <returns></returns>
+    public static Object ToJsonEntity(this String json, Type type)
+    {
+        if (json.IsNullOrEmpty()) return null;
+
+        return Default.Read(json, type);
     }
 
-    /// <summary>Json助手</summary>
-    public static class JsonHelper
+    /// <summary>从Json字符串中读取对象</summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="json"></param>
+    /// <returns></returns>
+    public static T ToJsonEntity<T>(this String json)
     {
-        /// <summary>默认实现</summary>
-        public static IJsonHost Default { get; set; }
+        if (json.IsNullOrEmpty()) return default;
 
-        static JsonHelper()
+        return (T)Default.Read(json, typeof(T));
+    }
+
+    /// <summary>格式化Json文本</summary>
+    /// <param name="json"></param>
+    /// <returns></returns>
+    public static String Format(String json)
+    {
+        var sb = Pool.StringBuilder.Get();
+
+        var escaping = false;
+        var inQuotes = false;
+        var indentation = 0;
+
+        foreach (var ch in json)
         {
-            Default = new FastJson();
-
-            //if (JsonNet.Support())
-            //    Default = new JsonNet();
-            //else
-            //    Default = new JsonDefault();
-        }
-
-        /// <summary>写入对象，得到Json字符串</summary>
-        /// <param name="value"></param>
-        /// <param name="indented">是否缩进</param>
-        /// <returns></returns>
-        public static String ToJson(this Object value, Boolean indented = false)
-        {
-            return Default.Write(value, indented);
-        }
-
-        /// <summary>从Json字符串中读取对象</summary>
-        /// <param name="json"></param>
-        /// <param name="type"></param>
-        /// <returns></returns>
-        public static Object ToJsonEntity(this String json, Type type)
-        {
-            return Default.Read(json, type);
-        }
-
-        /// <summary>从Json字符串中读取对象</summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="json"></param>
-        /// <returns></returns>
-        public static T ToJsonEntity<T>(this String json)
-        {
-            return (T)Default.Read(json, typeof(T));
-        }
-
-        /// <summary>格式化Json文本</summary>
-        /// <param name="json"></param>
-        /// <returns></returns>
-        public static String Format(String json)
-        {
-            var sb = new StringBuilder();
-
-            bool escaping = false;
-            bool inQuotes = false;
-            int indentation = 0;
-
-            foreach (char ch in json)
+            if (escaping)
             {
-                if (escaping)
+                escaping = false;
+                sb.Append(ch);
+            }
+            else
+            {
+                if (ch == '\\')
                 {
-                    escaping = false;
+                    escaping = true;
                     sb.Append(ch);
                 }
-                else
+                else if (ch == '\"')
                 {
-                    if (ch == '\\')
+                    inQuotes = !inQuotes;
+                    sb.Append(ch);
+                }
+                else if (!inQuotes)
+                {
+                    if (ch == ',')
                     {
-                        escaping = true;
+                        sb.Append(ch);
+                        sb.Append("\r\n");
+                        sb.Append(' ', indentation * 2);
+                    }
+                    else if (ch is '[' or '{')
+                    {
+                        sb.Append(ch);
+                        sb.Append("\r\n");
+                        sb.Append(' ', ++indentation * 2);
+                    }
+                    else if (ch is ']' or '}')
+                    {
+                        sb.Append("\r\n");
+                        sb.Append(' ', --indentation * 2);
                         sb.Append(ch);
                     }
-                    else if (ch == '\"')
+                    else if (ch == ':')
                     {
-                        inQuotes = !inQuotes;
                         sb.Append(ch);
-                    }
-                    else if (!inQuotes)
-                    {
-                        if (ch == ',')
-                        {
-                            sb.Append(ch);
-                            sb.Append("\r\n");
-                            sb.Append(' ', indentation * 2);
-                        }
-                        else if (ch == '[' || ch == '{')
-                        {
-                            sb.Append(ch);
-                            sb.Append("\r\n");
-                            sb.Append(' ', ++indentation * 2);
-                        }
-                        else if (ch == ']' || ch == '}')
-                        {
-                            sb.Append("\r\n");
-                            sb.Append(' ', --indentation * 2);
-                            sb.Append(ch);
-                        }
-                        else if (ch == ':')
-                        {
-                            sb.Append(ch);
-                            sb.Append(' ', 2);
-                        }
-                        else
-                        {
-                            sb.Append(ch);
-                        }
+                        sb.Append(' ', 2);
                     }
                     else
                     {
                         sb.Append(ch);
                     }
                 }
+                else
+                {
+                    sb.Append(ch);
+                }
             }
-
-            return sb.ToString();
         }
+
+        return sb.Put(true);
     }
 
-#if NET4
-    class JsonDefault : IJsonHost
+    /// <summary>Json类型对象转换实体类</summary>
+    /// <typeparam name="T"></typeparam>
+    /// <returns></returns>
+    public static T Convert<T>(Object obj)
     {
-        //static JsonDefault()
-        //{
-        //    // 用XmlIgnore特性作为忽略属性的方法
-        //    var src = typeof(JavaScriptSerializer).GetMethodEx("CheckScriptIgnoreAttribute");
-        //    var dst = typeof(JsonDefault).GetMethodEx("CheckScriptIgnoreAttribute");
-        //    if (src != null && dst != null)
-        //    {
-        //        //new JavaScriptSerializer().Invoke(src, src);
-        //        //new JsonDefault().CheckScriptIgnoreAttribute(dst);
-        //        ApiHook.ReplaceMethod(src, dst);
-        //    }
-        //}
+        if (obj == null) return default;
+        if (obj is T t) return t;
+        if (obj.GetType().As<T>()) return (T)obj;
 
-        private bool CheckScriptIgnoreAttribute(MemberInfo memberInfo)
+        return (T)Default.Convert(obj, typeof(T));
+    }
+
+    /// <summary>分析Json字符串得到字典</summary>
+    /// <param name="json"></param>
+    /// <returns></returns>
+    public static IDictionary<String, Object> DecodeJson(this String json) => Default.Decode(json);
+}
+
+/// <summary>轻量级FastJson序列化</summary>
+public class FastJson : IJsonHost
+{
+    #region IJsonHost 成员
+    /// <summary>写入对象，得到Json字符串</summary>
+    /// <param name="value"></param>
+    /// <param name="indented">是否缩进。默认false</param>
+    /// <param name="nullValue">是否写空值。默认true</param>
+    /// <param name="camelCase">是否驼峰命名。默认false</param>
+    /// <returns></returns>
+    public String Write(Object value, Boolean indented = false, Boolean nullValue = true, Boolean camelCase = false) => JsonWriter.ToJson(value, indented, nullValue, camelCase);
+
+    /// <summary>从Json字符串中读取对象</summary>
+    /// <param name="json"></param>
+    /// <param name="type"></param>
+    /// <returns></returns>
+    public Object Read(String json, Type type) => new JsonReader().Read(json, type);
+
+    /// <summary>类型转换</summary>
+    /// <param name="obj"></param>
+    /// <param name="targetType"></param>
+    /// <returns></returns>
+    public Object Convert(Object obj, Type targetType) => new JsonReader().ToObject(obj, targetType, null);
+
+    /// <summary>分析Json字符串得到字典</summary>
+    /// <param name="json"></param>
+    /// <returns></returns>
+    public IDictionary<String, Object> Decode(String json) => JsonParser.Decode(json);
+    #endregion
+}
+
+#if NET5_0_OR_GREATER
+/// <summary>系统级System.Text.Json标准序列化</summary>
+public class SystemJson : IJsonHost
+{
+    #region 静态
+    /// <summary>获取序列化配置项</summary>
+    /// <returns></returns>
+    public static JsonSerializerOptions GetDefaultOptions()
+    {
+        var opt = new JsonSerializerOptions(JsonSerializerDefaults.Web)
         {
-            if (memberInfo.IsDefined(typeof(ScriptIgnoreAttribute), true)) return true;
-            if (memberInfo.IsDefined(typeof(XmlIgnoreAttribute), true)) return true;
+            Encoder = JavaScriptEncoder.Create(UnicodeRanges.All),
+        };
+        opt.Converters.Add(new LocalTimeConverter());
+        opt.Converters.Add(new TypeConverter());
+#if NET7_0_OR_GREATER
+        opt.TypeInfoResolver = DataMemberResolver.Default;
+        //opt.TypeInfoResolver = new DefaultJsonTypeInfoResolver { Modifiers = { DataMemberResolver.Modifier } };
+#endif
+        return opt;
+    }
+    #endregion
 
-            return false;
-        }
+    #region 属性
+    /// <summary>配置项</summary>
+    public JsonSerializerOptions Options { get; set; } = GetDefaultOptions();
+    #endregion
 
     #region IJsonHost 成员
-        public String Write(Object value, Boolean indented)
+    /// <summary>写入对象，得到Json字符串</summary>
+    /// <param name="value"></param>
+    /// <param name="indented">是否缩进。默认false</param>
+    /// <param name="nullValue">是否写空值。默认true</param>
+    /// <param name="camelCase">是否驼峰命名。默认false</param>
+    /// <returns></returns>
+    public String Write(Object value, Boolean indented = false, Boolean nullValue = true, Boolean camelCase = false)
+    {
+        var opt = new JsonSerializerOptions(Options)
         {
-            var json = new JavaScriptSerializer().Serialize(value);
-            //if (indented) json = Process(json);
-            if (indented) json = JsonHelper.Format(json);
+            WriteIndented = indented
+        };
+        if (!nullValue) opt.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault;
+        if (camelCase) opt.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
 
-            return json;
-        }
-
-        public Object Read(String json, Type type)
-        {
-            // 如果有必要，可以实现JavaScriptTypeResolver，然后借助Type.GetTypeEx得到更强的反射类型能力
-            return new JavaScriptSerializer().Deserialize(json, type);
-        }
-
-        //static String Process(String inputText)
-        //{
-        //    bool escaped = false;
-        //    bool inquotes = false;
-        //    int column = 0;
-        //    int indentation = 0;
-        //    var indentations = new Stack<int>();
-        //    int TABBING = 8;
-        //    var sb = new StringBuilder();
-        //    foreach (char x in inputText)
-        //    {
-        //        sb.Append(x);
-        //        column++;
-        //        if (escaped)
-        //        {
-        //            escaped = false;
-        //        }
-        //        else
-        //        {
-        //            if (x == '\\')
-        //            {
-        //                escaped = true;
-        //            }
-        //            else if (x == '\"')
-        //            {
-        //                inquotes = !inquotes;
-        //            }
-        //            else if (!inquotes)
-        //            {
-        //                if (x == ',')
-        //                {
-        //                    // if we see a comma, go to next line, and indent to the same depth
-        //                    sb.Append("\r\n");
-        //                    column = 0;
-        //                    for (int i = 0; i < indentation; i++)
-        //                    {
-        //                        sb.Append(" ");
-        //                        column++;
-        //                    }
-        //                }
-        //                else if (x == '[' || x == '{')
-        //                {
-        //                    // if we open a bracket or brace, indent further (push on stack)
-        //                    indentations.Push(indentation);
-        //                    indentation = column;
-        //                }
-        //                else if (x == ']' || x == '}')
-        //                {
-        //                    // if we close a bracket or brace, undo one level of indent (pop)
-        //                    indentation = indentations.Pop();
-        //                }
-        //                else if (x == ':')
-        //                {
-        //                    // if we see a colon, add spaces until we get to the next
-        //                    // tab stop, but without using tab characters!
-        //                    while ((column % TABBING) != 0)
-        //                    {
-        //                        sb.Append(' ');
-        //                        column++;
-        //                    }
-        //                }
-        //            }
-        //        }
-        //    }
-        //    return sb.ToString();
-        //}
-    #endregion
+        return JsonSerializer.Serialize(value, opt);
     }
+
+    /// <summary>从Json字符串中读取对象</summary>
+    /// <param name="json"></param>
+    /// <param name="type"></param>
+    /// <returns></returns>
+    public Object Read(String json, Type type)
+    {
+        var opt = Options;
+#if NET7_0_OR_GREATER
+        //opt.TypeInfoResolver = new DataMemberResolver { Modifiers = { OnModifierType } };
 #endif
 
-    class JsonNet : IJsonHost
-    {
-        private static Type _Convert;
-        private static Type _Formatting;
-        private static Object _Set;
-        static JsonNet()
-        {
-            var type = "Newtonsoft.Json.JsonConvert".GetTypeEx();
-            if (type != null)
-            {
-                _Convert = type;
-                _Formatting = "Newtonsoft.Json.Formatting".GetTypeEx();
-                type = "Newtonsoft.Json.JsonSerializerSettings".GetTypeEx();
-
-                // 忽略循环引用
-                _Set = type.CreateInstance();
-                if (_Set != null) _Set.SetValue("ReferenceLoopHandling", 1);
-
-                // 自定义IContractResolver，用XmlIgnore特性作为忽略属性的方法
-                var sc = ScriptEngine.Create(_code, false);
-                sc.Compile();
-                if (sc.Method != null)
-                {
-                    _Set.SetValue("ContractResolver", sc.Method.DeclaringType.CreateInstance());
-                }
-
-                if (XTrace.Debug) XTrace.WriteLine("使用Json.Net，位于 {0}", _Convert.Assembly.Location);
-            }
-        }
-
-        private const String _code = @"
-class MyContractResolver : Newtonsoft.Json.Serialization.DefaultContractResolver
-{
-    protected override Newtonsoft.Json.Serialization.JsonProperty CreateProperty(MemberInfo member, Newtonsoft.Json.MemberSerialization memberSerialization)
-    {
-        if (member.GetCustomAttribute<System.Xml.Serialization.XmlIgnoreAttribute>() != null) return null;
-
-        return base.CreateProperty(member, memberSerialization);
-    }
-    public static void Main() { }
-}";
-
-        /// <summary>是否支持</summary>
-        /// <returns></returns>
-        public static Boolean Support() { return _Convert != null; }
-
-        #region IJsonHost 成员
-        public String Write(Object value, Boolean indented)
-        {
-            // 忽略循环引用
-            //var set = _Set.CreateInstance();
-            //if (set != null) set.SetValue("ReferenceLoopHandling", 1);
-
-            if (!indented)
-                return (String)_Convert.Invoke("SerializeObject", value, _Set);
-            else
-                return (String)_Convert.Invoke("SerializeObject", value, Enum.ToObject(_Formatting, 1), _Set);
-        }
-
-        public Object Read(String json, Type type)
-        {
-            return _Convert.Invoke("DeserializeObject", json, type);
-        }
-        #endregion
+        return JsonSerializer.Deserialize(json, type, opt);
     }
 
-    class FastJson : IJsonHost
+#if NET7_0_OR_GREATER
+    //static void OnModifierType(JsonTypeInfo typeInfo)
+    //{
+    //    if (typeInfo.Kind != JsonTypeInfoKind.Object) return;
+
+    //    var type = typeInfo.Type;
+    //    if (type.IsInterface || type.IsAbstract)
+    //    {
+    //        var t = ObjectContainer.Current.Resolve(type);
+    //    }
+    //}
+#endif
+
+    /// <summary>类型转换</summary>
+    /// <param name="obj"></param>
+    /// <param name="targetType"></param>
+    /// <returns></returns>
+    public Object Convert(Object obj, Type targetType) => new JsonReader().ToObject(obj, targetType, null);
+
+    /// <summary>分析Json字符串得到字典</summary>
+    /// <param name="json"></param>
+    /// <returns></returns>
+    public IDictionary<String, Object> Decode(String json)
     {
-
-        #region IJsonHost 成员
-
-        public string Write(object value, bool indented = false)
-        {
-            return new JsonWriter().ToJson(value, indented);
-        }
-
-        public object Read(string json, Type type)
-        {
-            return new JsonReader().ToObject(json, type);
-        }
-
-        #endregion
+        var doc = JsonDocument.Parse(json);
+        return doc.RootElement.ToDictionary();
     }
+    #endregion
 }
+#endif

@@ -171,7 +171,7 @@ namespace NewLife.Reflection
         /// <param name="baseType">基类或接口</param>
         /// <param name="isLoadAssembly">是否加载为加载程序集</param>
         /// <returns></returns>
-        public override IEnumerable<Type> GetAllSubclasses(Type baseType, Boolean isLoadAssembly)
+        public virtual IEnumerable<Type> GetAllSubclasses(Type baseType, Boolean isLoadAssembly)
         {
             return AssemblyX.FindAllPlugins(baseType, isLoadAssembly);
         }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text;
+using NewLife.Data;
 using NewLife.Log;
 
 namespace NewLife.Serialization
@@ -20,11 +21,14 @@ namespace NewLife.Serialization
         /// <summary>成员</summary>
         MemberInfo Member { get; set; }
 
-        /// <summary>文本编码</summary>
+        /// <summary>字符串编码，默认utf-8</summary>
         Encoding Encoding { get; set; }
 
         /// <summary>序列化属性而不是字段。默认true</summary>
         Boolean UseProperty { get; set; }
+
+        /// <summary>用户对象。存放序列化过程中使用的用户自定义对象</summary>
+        Object UserState { get; set; }
         #endregion
 
         #region 方法
@@ -59,7 +63,7 @@ namespace NewLife.Serialization
 
     /// <summary>序列化处理器接口</summary>
     /// <typeparam name="THost"></typeparam>
-    public interface IHandler<THost> : IComparable<IHandler<THost>> where THost : IFormatterX
+    public interface IHandler<THost> where THost : IFormatterX
     {
         /// <summary>宿主读写器</summary>
         THost Host { get; set; }
@@ -84,33 +88,23 @@ namespace NewLife.Serialization
     public abstract class FormatterBase //: IFormatterX
     {
         #region 属性
-        private Int64 _StartPosition = 0;
-
-        private Stream _Stream;
         /// <summary>数据流。默认实例化一个内存数据流</summary>
-        public virtual Stream Stream { get { return _Stream ?? (_Stream = new MemoryStream()); } set { _Stream = value; _StartPosition = value == null ? 0 : value.Position; } }
+        public virtual Stream Stream { get; set; } = new MemoryStream();
 
         /// <summary>主对象</summary>
-        public Stack<Object> Hosts { get; private set; }
+        public Stack<Object> Hosts { get; private set; } = new Stack<Object>();
 
         /// <summary>成员</summary>
         public MemberInfo Member { get; set; }
 
-        /// <summary>字符串编码，默认Default</summary>
-        public Encoding Encoding { get; set; }
+        /// <summary>字符串编码，默认utf-8</summary>
+        public Encoding Encoding { get; set; } = Encoding.UTF8;
 
         /// <summary>序列化属性而不是字段。默认true</summary>
-        public Boolean UseProperty { get; set; }
-        #endregion
+        public Boolean UseProperty { get; set; } = true;
 
-        #region 构造
-        /// <summary>实例化</summary>
-        public FormatterBase()
-        {
-            Hosts = new Stack<Object>();
-            Encoding = Encoding.Default;
-            UseProperty = true;
-        }
+        /// <summary>用户对象。存放序列化过程中使用的用户自定义对象</summary>
+        public Object UserState { get; set; }
         #endregion
 
         #region 方法
@@ -120,29 +114,36 @@ namespace NewLife.Serialization
         {
             var ms = Stream;
             var pos = ms.Position;
-            var start = _StartPosition;
+            var start = 0;
             if (pos == 0 || pos == start) return new Byte[0];
 
-            if (ms is MemoryStream && pos == ms.Length && start == 0)
-                return (ms as MemoryStream).ToArray();
+            if (ms is MemoryStream ms2 && pos == ms.Length && start == 0)
+                return ms2.ToArray();
 
             ms.Position = start;
-            return ms.ReadBytes(pos - start);
+
+            var buf = new Byte[pos - start];
+            ms.Read(buf, 0, buf.Length);
+            return buf;
+        }
+
+        /// <summary>获取流里面的数据包</summary>
+        /// <returns></returns>
+        public Packet GetPacket()
+        {
+            Stream.Position = 0;
+            return new(Stream);
         }
         #endregion
 
         #region 跟踪日志
-        private ILog _Log = Logger.Null;
         /// <summary>日志提供者</summary>
-        public ILog Log { get { return _Log; } set { _Log = value; } }
+        public ILog Log { get; set; } = Logger.Null;
 
         /// <summary>输出日志</summary>
         /// <param name="format"></param>
         /// <param name="args"></param>
-        public virtual void WriteLog(String format, params Object[] args)
-        {
-            Log.Info(format, args);
-        }
+        public virtual void WriteLog(String format, params Object[] args) => Log?.Info(format, args);
         #endregion
     }
 
@@ -151,13 +152,11 @@ namespace NewLife.Serialization
         where THost : IFormatterX
         where THandler : IHandler<THost>
     {
-        private THost _Host;
         /// <summary>宿主读写器</summary>
-        public THost Host { get { return _Host; } set { _Host = value; } }
+        public THost Host { get; set; }
 
-        private Int32 _Priority;
         /// <summary>优先级</summary>
-        public Int32 Priority { get { return _Priority; } set { _Priority = value; } }
+        public Int32 Priority { get; set; }
 
         /// <summary>写入一个对象</summary>
         /// <param name="value">目标对象</param>
@@ -171,18 +170,9 @@ namespace NewLife.Serialization
         /// <returns></returns>
         public abstract Boolean TryRead(Type type, ref Object value);
 
-        Int32 IComparable<IHandler<THost>>.CompareTo(IHandler<THost> other)
-        {
-            // 优先级较大在前面
-            return this.Priority.CompareTo(other.Priority);
-        }
-
         /// <summary>输出日志</summary>
         /// <param name="format"></param>
         /// <param name="args"></param>
-        public void WriteLog(String format, params Object[] args)
-        {
-            Host.Log.Info(format, args);
-        }
+        public void WriteLog(String format, params Object[] args) => Host.Log.Info(format, args);
     }
 }

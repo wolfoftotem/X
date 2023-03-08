@@ -1,13 +1,18 @@
 ﻿using System;
-using System.IO;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.Tasks;
+using NewLife.Data;
 using NewLife.Log;
+using NewLife.Model;
 
 namespace NewLife.Net
 {
     /// <summary>Udp会话。仅用于服务端与某一固定远程地址通信</summary>
-    class UdpSession : DisposeBase, ISocketSession, ITransport
+    internal class UdpSession : DisposeBase, ISocketSession, ITransport
     {
         #region 属性
         /// <summary>会话编号</summary>
@@ -20,199 +25,170 @@ namespace NewLife.Net
         public UdpServer Server { get; set; }
 
         /// <summary>底层Socket</summary>
-        Socket ISocket.Socket { get { return Server == null ? null : Server.Client.Client; } }
+        Socket ISocket.Client => Server?.Client;
 
-        /// <summary>数据流</summary>
-        public Stream Stream { get; set; }
+        ///// <summary>数据流</summary>
+        //public Stream Stream { get; set; }
 
         private NetUri _Local;
         /// <summary>本地地址</summary>
         public NetUri Local
         {
-            get
-            {
-                return _Local ?? (_Local = Server == null ? null : Server.Local);
-            }
-            set { Server.Local = _Local = value; }
+            get => _Local ??= Server?.Local;
+            set => Server.Local = _Local = value;
         }
 
         /// <summary>端口</summary>
-        public Int32 Port { get { return Local.Port; } set { Local.Port = value; } }
+        public Int32 Port { get => Local.Port; set => Local.Port = value; }
 
-        private NetUri _Remote;
         /// <summary>远程地址</summary>
-        public NetUri Remote { get { return _Remote; } set { _Remote = value; } }
+        public NetUri Remote { get; set; }
+
+        private Int32 _timeout;
+        /// <summary>超时。默认3000ms</summary>
+        public Int32 Timeout
+        {
+            get => _timeout;
+            set
+            {
+                _timeout = value;
+                if (Server != null)
+                    Server.Client.ReceiveTimeout = _timeout;
+            }
+        }
+
+        /// <summary>消息管道。收发消息都经过管道处理器，进行协议编码解码</summary>
+        /// <remarks>
+        /// 1，接收数据解码时，从前向后通过管道处理器；
+        /// 2，发送数据编码时，从后向前通过管道处理器；
+        /// </remarks>
+        public IPipeline Pipeline { get; set; }
 
         /// <summary>Socket服务器。当前通讯所在的Socket服务器，其实是TcpServer/UdpServer</summary>
-        ISocketServer ISocketSession.Server { get { return Server; } }
-
-        /// <summary>是否抛出异常，默认false不抛出。Send/Receive时可能发生异常，该设置决定是直接抛出异常还是通过<see cref="Error"/>事件</summary>
-        public Boolean ThrowException { get { return Server.ThrowException; } set { Server.ThrowException = value; } }
-
-        /// <summary>发送数据包统计信息，默认关闭，通过<see cref="IStatistics.Enable"/>打开。</summary>
-        public IStatistics StatSend { get; set; }
-
-        /// <summary>接收数据包统计信息，默认关闭，通过<see cref="IStatistics.Enable"/>打开。</summary>
-        public IStatistics StatReceive { get; set; }
-
-        private IPEndPoint _Filter;
-
-        /// <summary>通信开始时间</summary>
-        public DateTime StartTime { get; private set; }
+        ISocketServer ISocketSession.Server => Server;
 
         /// <summary>最后一次通信时间，主要表示活跃时间，包括收发</summary>
-        public DateTime LastTime { get; private set; }
+        public DateTime LastTime { get; private set; } = DateTime.Now;
+
+        /// <summary>APM性能追踪器</summary>
+        public ITracer Tracer { get; set; }
         #endregion
 
         #region 构造
         public UdpSession(UdpServer server, IPEndPoint remote)
         {
             Name = server.Name;
-            Stream = new MemoryStream();
-            StartTime = DateTime.Now;
 
             Server = server;
-            Remote = new NetUri(ProtocolType.Udp, remote);
-            _Filter = remote;
+            Remote = new NetUri(NetType.Udp, remote);
+            Tracer = server.Tracer;
 
-            //StatSend = new Statistics();
-            //StatReceive = new Statistics();
-            StatSend = server.StatSend;
-            StatReceive = server.StatReceive;
+            // 检查并开启广播
+            server.Client.CheckBroadcast(remote.Address);
         }
 
         public void Start()
         {
-            //server.Received += server_Received;
-            Server.ReceiveAsync();
-            //server.Error += server_Error;
+            Pipeline = Server.Pipeline;
+
+            //Server.ReceiveAsync();
+            Server.Open();
 
             WriteLog("New {0}", Remote.EndPoint);
+
+            // 管道
+            Pipeline?.Open(Server.CreateContext(this));
         }
 
-        protected override void OnDispose(bool disposing)
+        protected override void Dispose(Boolean disposing)
         {
-            base.OnDispose(disposing);
+            base.Dispose(disposing);
 
-            //Server.WriteLog("{0}[{1}].Close {2}", Server.Name, ID, this);
             WriteLog("Close {0}", Remote.EndPoint);
 
-            //Server.Received -= server_Received;
-            //Server.Error -= server_Error;
+            // 管道
+            var ctx = Server?.CreateContext(this);
+            if (ctx != null)
+                Pipeline?.Close(ctx, disposing ? "Dispose" : "GC");
+
             // 释放对服务对象的引用，如果没有其它引用，服务对象将会被回收
             Server = null;
-            //GC.Collect();
         }
         #endregion
 
-        #region 收发
-        public Boolean Send(byte[] buffer, int offset = 0, int count = -1)
+        #region 发送
+        public Int32 Send(Packet data)
         {
-            if (Disposed) throw new ObjectDisposedException(this.GetType().Name);
+            if (Disposed) throw new ObjectDisposedException(GetType().Name);
 
-            if (count <= 0) count = buffer.Length - offset;
-            if (offset > 0) buffer = buffer.ReadBytes(offset, count);
+            return Server.OnSend(data, Remote.EndPoint);
+        }
 
-            if (StatSend != null) StatSend.Increment(count);
-            if (Log.Enable && LogSend) WriteLog("Send [{0}]: {1}", count, buffer.ToHex(0, Math.Min(count, 32)));
-
-            LastTime = DateTime.Now;
-
+        /// <summary>发送消息，不等待响应</summary>
+        /// <param name="message"></param>
+        /// <returns></returns>
+        public virtual Int32 SendMessage(Object message)
+        {
+            using var span = Tracer?.NewSpan($"net:{Name}:SendMessage", message);
             try
             {
-                Server.Client.Send(buffer, count, Remote.EndPoint);
-
-                return true;
+                var ctx = Server.CreateContext(this);
+                return (Int32)Pipeline.Write(ctx, message);
             }
             catch (Exception ex)
             {
-                OnError("Send", ex);
-                Dispose();
+                span?.SetError(ex, message);
                 throw;
             }
         }
 
-        /// <summary>异步发送数据</summary>
-        /// <param name="buffer"></param>
+        /// <summary>发送消息并等待响应</summary>
+        /// <param name="message"></param>
         /// <returns></returns>
-        public Boolean SendAsync(Byte[] buffer) { return SendAsync(buffer, 1, 0); }
-
-        /// <summary>异步多次发送数据</summary>
-        /// <param name="buffer"></param>
-        /// <param name="times"></param>
-        /// <param name="msInterval"></param>
-        /// <returns></returns>
-        public Boolean SendAsync(Byte[] buffer, Int32 times, Int32 msInterval)
+        public virtual Task<Object> SendMessageAsync(Object message)
         {
-            return Server.SendAsync(buffer, times, msInterval, Remote.EndPoint);
-        }
-
-        Boolean CheckFilter(IPEndPoint remote)
-        {
-            // IPAddress是类，不同实例对象当然不相等啦
-            if (!_Filter.IsAny())
+            using var span = Tracer?.NewSpan($"net:{Name}:SendMessageAsync", message);
+            try
             {
-                //if (_Filter.Address != remote.Address || _Filter.Port != remote.Port) return false;
-                if (!_Filter.Equals(remote)) return false;
+                var ctx = Server.CreateContext(this);
+                var source = new TaskCompletionSource<Object>();
+                ctx["TaskSource"] = source;
+
+                var rs = (Int32)Pipeline.Write(ctx, message);
+                if (rs < 0) return Task.FromResult((Object)null);
+
+                return source.Task;
             }
-
-            return true;
-        }
-
-        public byte[] Receive()
-        {
-            if (Disposed) throw new ObjectDisposedException(this.GetType().Name);
-
-            // UDP会话的直接读取可能会读到不是自己的数据，所以尽量不要两个会话一起读
-            var buf = Server.Receive();
-
-            var ep = Server.Remote.EndPoint;
-            if (!CheckFilter(ep))
+            catch (Exception ex)
             {
-                // 交给其它会话
-                Server.OnReceive(buf, ep);
-                return new Byte[0];
+                span?.SetError(ex, message);
+                throw;
             }
-
-            Remote.EndPoint = ep;
-
-            LastTime = DateTime.Now;
-            //if (StatReceive != null) StatReceive.Increment(buf.Length);
-
-            return buf;
         }
 
-        public int Receive(byte[] buffer, int offset = 0, int count = -1)
-        {
-            if (Disposed) throw new ObjectDisposedException(this.GetType().Name);
-
-            // UDP会话的直接读取可能会读到不是自己的数据，所以尽量不要两个会话一起读
-            var size = Server.Receive(buffer, offset, count);
-
-            var ep = Server.Remote.EndPoint;
-            if (!CheckFilter(ep))
-            {
-                // 交给其它会话
-                Server.OnReceive(buffer.ReadBytes(offset, size), ep);
-                return 0;
-            }
-
-            Remote.EndPoint = ep;
-
-            LastTime = DateTime.Now;
-            //if (StatReceive != null) StatReceive.Increment(size);
-
-            return size;
-        }
         #endregion
 
-        #region 异步接收
-        /// <summary>开始异步接收数据</summary>
-        public Boolean ReceiveAsync()
+        #region 接收
+        /// <summary>接收数据</summary>
+        /// <returns></returns>
+        public Packet Receive()
         {
-            if (Disposed) throw new ObjectDisposedException(this.GetType().Name);
+            if (Disposed) throw new ObjectDisposedException(GetType().Name);
 
-            return Server.ReceiveAsync();
+            using var span = Tracer?.NewSpan($"net:{Name}:Receive", Server.BufferSize + "");
+            try
+            {
+                var ep = Remote.EndPoint as EndPoint;
+                var buf = new Byte[Server.BufferSize];
+                var size = Server.Client.ReceiveFrom(buf, ref ep);
+
+                return new Packet(buf, 0, size);
+            }
+            catch (Exception ex)
+            {
+                span?.SetError(ex, null);
+                throw;
+            }
         }
 
         public event EventHandler<ReceivedEventArgs> Received;
@@ -220,55 +196,61 @@ namespace NewLife.Net
         internal void OnReceive(ReceivedEventArgs e)
         {
             LastTime = DateTime.Now;
-            //if (StatReceive != null) StatReceive.Increment(e.Length);
 
-            if (Log.Enable && LogReceive) WriteLog("Recv [{0}]: {1}", e.Length, e.Data.ToHex(0, Math.Min(e.Length, 32)));
-
-            if (Received != null) Received(this, e);
+            if (e != null) Received?.Invoke(this, e);
         }
+
+        /// <summary>处理数据帧</summary>
+        /// <param name="data">数据帧</param>
+        void ISocketRemote.Process(IData data) => (Server as ISocketRemote).Process(data);
         #endregion
 
         #region 异常处理
         /// <summary>错误发生/断开连接时</summary>
         public event EventHandler<ExceptionEventArgs> Error;
 
-        //void server_Error(object sender, ExceptionEventArgs e)
-        //{
-        //    OnError(null, e.Exception);
-        //}
-
         /// <summary>触发异常</summary>
         /// <param name="action">动作</param>
         /// <param name="ex">异常</param>
         protected virtual void OnError(String action, Exception ex)
         {
-            if (Log != null) Log.Error(LogPrefix + "{0}Error {1} {2}", action, this, ex == null ? null : ex.Message);
-            if (Error != null) Error(this, new ExceptionEventArgs { Exception = ex });
+            if (Log != null) Log.Error(LogPrefix + "{0}Error {1} {2}", action, this, ex?.Message);
+            Error?.Invoke(this, new ExceptionEventArgs { Exception = ex });
         }
         #endregion
 
         #region 辅助
         /// <summary>已重载。</summary>
         /// <returns></returns>
-        public override string ToString()
+        public override String ToString()
         {
             if (Remote != null && !Remote.EndPoint.IsAny())
-                return String.Format("{0}=>{1}", Local, Remote.EndPoint);
+                return $"{Local}=>{Remote.EndPoint}";
             else
                 return Local.ToString();
         }
         #endregion
 
         #region ITransport接口
-        bool ITransport.Open() { return true; }
+        Boolean ITransport.Open() => true;
 
-        bool ITransport.Close() { return true; }
+        Boolean ITransport.Close() => true;
+        #endregion
+
+        #region 扩展接口
+        private readonly ConcurrentDictionary<String, Object> _Items = new();
+        /// <summary>数据项</summary>
+        public IDictionary<String, Object> Items => _Items;
+
+        /// <summary>设置 或 获取 数据项</summary>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public Object this[String key] { get => _Items.TryGetValue(key, out var obj) ? obj : null; set => _Items[key] = value; }
         #endregion
 
         #region 日志
-        private ILog _Log;
         /// <summary>日志提供者</summary>
-        public ILog Log { get { return _Log; } set { _Log = value; } }
+        public ILog Log { get; set; }
 
         /// <summary>是否输出发送日志。默认false</summary>
         public Boolean LogSend { get; set; }
@@ -285,11 +267,11 @@ namespace NewLife.Net
                 if (_LogPrefix == null)
                 {
                     var name = Server == null ? "" : Server.Name;
-                    _LogPrefix = "{0}[{1}].".F(name, ID);
+                    _LogPrefix = $"{name}[{ID}].";
                 }
                 return _LogPrefix;
             }
-            set { _LogPrefix = value; }
+            set => _LogPrefix = value;
         }
 
         /// <summary>输出日志</summary>
@@ -303,6 +285,7 @@ namespace NewLife.Net
         /// <summary>输出日志</summary>
         /// <param name="format"></param>
         /// <param name="args"></param>
+        [Conditional("DEBUG")]
         public void WriteDebugLog(String format, params Object[] args)
         {
             if (Log != null) Log.Debug(LogPrefix + format, args);

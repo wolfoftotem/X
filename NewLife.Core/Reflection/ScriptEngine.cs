@@ -1,5 +1,7 @@
-﻿using System;
+﻿#if __WIN__
+using System;
 using System.CodeDom.Compiler;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.IO;
@@ -13,6 +15,8 @@ namespace NewLife.Reflection
 {
     /// <summary>脚本引擎</summary>
     /// <remarks>
+    /// 文档 https://www.yuque.com/smartstone/nx/script_engine
+    /// 
     /// 三大用法：
     /// 1，单个表达式，根据参数计算表达式结果并返回
     /// 2，多个语句，最后有返回语句
@@ -51,27 +55,26 @@ namespace NewLife.Reflection
     public class ScriptEngine
     {
         #region 属性
-        private String _Code;
         /// <summary>代码</summary>
-        public String Code { get { return _Code; } private set { _Code = value; } }
+        public String Code { get; private set; }
 
-        private Boolean _IsExpression;
         /// <summary>是否表达式</summary>
-        public Boolean IsExpression { get { return _IsExpression; } set { _IsExpression = value; } }
+        public Boolean IsExpression { get; set; }
 
-        private IDictionary<String, Type> _Parameters;
         /// <summary>参数集合。编译后就不可修改。</summary>
-        public IDictionary<String, Type> Parameters { get { return _Parameters ?? (_Parameters = new Dictionary<String, Type>()); } }
+        public IDictionary<String, Type> Parameters { get; } = new Dictionary<String, Type>();
 
-        private String _FinalCode;
         /// <summary>最终代码</summary>
-        public String FinalCode { get { if (_FinalCode == null && !String.IsNullOrEmpty(Code)) GenerateCode(); return _FinalCode; } private set { _FinalCode = value; } }
+        public String FinalCode { get; private set; }
 
-        private MethodInfo _Method;
-        /// <summary>根据代码编译出来可供直接调用的方法</summary>
-        public MethodInfo Method { get { return _Method; } private set { _Method = value; } }
+        /// <summary>编译得到的类型</summary>
+        public Type Type { get; private set; }
 
-        private StringCollection _NameSpaces = new StringCollection{
+        /// <summary>根据代码编译出来可供直接调用的入口方法，Eval/Main</summary>
+        public MethodInfo Method { get; private set; }
+
+        /// <summary>命名空间集合</summary>
+        public StringCollection NameSpaces { get; set; } = new StringCollection{
             "System",
             "System.Collections",
             "System.Diagnostics",
@@ -79,20 +82,15 @@ namespace NewLife.Reflection
             "System.Text",
             "System.Linq",
             "System.IO"};
-        /// <summary>命名空间集合</summary>
-        public StringCollection NameSpaces { get { return _NameSpaces; } set { _NameSpaces = value; } }
 
-        private StringCollection _ReferencedAssemblies = new StringCollection();
         /// <summary>引用程序集集合</summary>
-        public StringCollection ReferencedAssemblies { get { return _ReferencedAssemblies; } set { _ReferencedAssemblies = value; } }
+        public StringCollection ReferencedAssemblies { get; set; } = new StringCollection();
 
-        private ILog _Log;
         /// <summary>日志</summary>
-        public ILog Log { get { return _Log; } set { _Log = value; } }
+        public ILog Log { get; set; }
 
-        private String _WorkingDirectory;
         /// <summary>工作目录。执行时，将会作为环境变量的当前目录和PathHelper目录，执行后还原</summary>
-        public String WorkingDirectory { get { return _WorkingDirectory; } set { _WorkingDirectory = value; } }
+        public String WorkingDirectory { get; set; }
         #endregion
 
         #region 创建
@@ -111,17 +109,17 @@ namespace NewLife.Reflection
             IsExpression = isExpression;
         }
 
-        static DictionaryCache<String, ScriptEngine> _cache = new DictionaryCache<String, ScriptEngine>(StringComparer.OrdinalIgnoreCase);
+        static readonly ConcurrentDictionary<String, ScriptEngine> _cache = new(StringComparer.OrdinalIgnoreCase);
         /// <summary>为指定代码片段创建脚本引擎实例。采用缓存，避免同一脚本重复创建引擎。</summary>
         /// <param name="code">代码片段</param>
         /// <param name="isExpression">是否表达式，表达式将编译成为一个Main方法</param>
         /// <returns></returns>
         public static ScriptEngine Create(String code, Boolean isExpression = true)
         {
-            if (String.IsNullOrEmpty(code)) throw new ArgumentNullException("code");
+            if (String.IsNullOrEmpty(code)) throw new ArgumentNullException(nameof(code));
 
             var key = code + isExpression;
-            return _cache.GetItem<String, Boolean>(key, code, isExpression, (k, c, b) => new ScriptEngine(c, b));
+            return _cache.GetOrAdd(key, k => new ScriptEngine(code, isExpression));
         }
         #endregion
 
@@ -171,7 +169,7 @@ namespace NewLife.Reflection
             var types = ps.GetTypeArray();
 
             var dic = se.Parameters;
-            for (int i = 0; i < names.Length; i++)
+            for (var i = 0; i < names.Length; i++)
             {
                 dic.Add(names[i], types[i]);
             }
@@ -191,14 +189,14 @@ namespace NewLife.Reflection
             if (se != null && se.Method != null) return se.Invoke(parameters);
 
             var names = new String[parameters.Length];
-            for (int i = 0; i < names.Length; i++)
+            for (var i = 0; i < names.Length; i++)
             {
                 names[i] = "p" + i;
             }
             var types = parameters.GetTypeArray();
 
             var dic = se.Parameters;
-            for (int i = 0; i < names.Length; i++)
+            for (var i = 0; i < names.Length; i++)
             {
                 dic.Add(names[i], types[i]);
             }
@@ -252,12 +250,16 @@ namespace NewLife.Reflection
             }
             //else if (!code.Contains("static void Main("))
             // 这里也许用正则判断会更好一些
-            else if (!code.Contains(" Main("))
+            else if (!code.Contains(" Main(") && !code.Contains(" class "))
             {
-                // 如果不是;和}结尾，则增加分号
-                var last = code[code.Length - 1];
-                if (last != ';' && last != '}') code += ";";
-                code = String.Format("\t\tstatic void Main()\r\n\t\t{{\r\n\t\t\t{0}\r\n\t\t}}", code);
+                // 单行才考虑加分号，多行可能有 #line 指令开头
+                if (!code.Contains(Environment.NewLine))
+                {
+                    // 如果不是;和}结尾，则增加分号
+                    var last = code[code.Length - 1];
+                    if (last is not ';' and not '}') code += ";";
+                }
+                code = $"\t\tstatic void Main()\r\n\t\t{{\r\n\t\t\t{code}\r\n\t\t}}";
             }
 
             // 没有命名空间，包含一个
@@ -266,10 +268,10 @@ namespace NewLife.Reflection
                 // 没有类名，包含一个
                 if (!code.Contains("class "))
                 {
-                    code = String.Format("\tpublic class {0}\r\n\t{{\r\n{1}\r\n\t}}", this.GetType().Name, code);
+                    code = $"\tpublic class {GetType().Name}\r\n\t{{\r\n{code}\r\n\t}}";
                 }
 
-                code = String.Format("namespace {0}\r\n{{\r\n{1}\r\n}}", this.GetType().Namespace, code);
+                code = $"namespace {GetType().Namespace}\r\n{{\r\n{code}\r\n}}";
             }
 
             // 命名空间
@@ -317,9 +319,9 @@ namespace NewLife.Reflection
 
                     try
                     {
-                        var type = rs.CompiledAssembly.GetTypes()[0];
+                        Type = rs.CompiledAssembly.GetTypes()[0];
                         var name = IsExpression ? "Eval" : "Main";
-                        Method = type.GetMethod(name, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                        Method = Type.GetMethod(name, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
                     }
                     catch (ReflectionTypeLoadException ex)
                     {
@@ -335,8 +337,15 @@ namespace NewLife.Reflection
 
                     // 异常中输出错误代码行
                     var code = "";
-                    var ss = FinalCode.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
-                    if (err.Line > 0 && err.Line <= ss.Length) code = ss[err.Line - 1].Trim();
+                    if (!err.FileName.IsNullOrEmpty() && File.Exists(err.FileName))
+                    {
+                        code = File.ReadAllLines(err.FileName)[err.Line - 1];
+                    }
+                    else
+                    {
+                        var ss = FinalCode.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
+                        if (err.Line > 0 && err.Line <= ss.Length) code = ss[err.Line - 1].Trim();
+                    }
 
                     throw new XException("{0} {1} {2}({3},{4}) {5}", err.ErrorNumber, err.ErrorText, err.FileName, err.Line, err.Column, code);
                 }
@@ -351,9 +360,11 @@ namespace NewLife.Reflection
         {
             if (options == null)
             {
-                options = new CompilerParameters();
-                options.GenerateInMemory = true;
-                options.GenerateExecutable = !IsExpression;
+                options = new CompilerParameters
+                {
+                    GenerateInMemory = true,
+                    GenerateExecutable = !IsExpression
+                };
             }
 
             var hs = new HashSet<String>(StringComparer.OrdinalIgnoreCase);
@@ -377,8 +388,9 @@ namespace NewLife.Reflection
                 if (item is AssemblyBuilder) continue;
 
                 // 三趾树獭  303409914 发现重复加载同一个DLL，表现为Web站点Bin目录有一个，系统缓存有一个
-                if (hs.Contains(item.FullName)) continue;
-                hs.Add(item.FullName);
+                // 相同程序集不同版本，全名不想等
+                if (hs.Contains(item.GetName().Name)) continue;
+                hs.Add(item.GetName().Name);
 
                 String name = null;
                 try
@@ -395,59 +407,27 @@ namespace NewLife.Reflection
                 if (!options.ReferencedAssemblies.Contains(name)) options.ReferencedAssemblies.Add(name);
             }
 
+            // 最高仅支持C# 5.0
+            /*
+             * Microsoft (R) Visual C# Compiler version 4.6.1590.0 for C# 5
+             * Copyright (C) Microsoft Corporation. All rights reserved.
+             * 
+             * This compiler is provided as part of the Microsoft (R) .NET Framework, 
+             * but only supports language versions up to C# 5, which is no longer the latest version. 
+             * For compilers that support newer versions of the C# programming language, see http://go.microsoft.com/fwlink/?LinkID=533240
+             */
+            var opts = new Dictionary<String, String>();
+            //opts["CompilerVersion"] = "v6.0";
+            // 开发者机器有C# 6.0编译器
+            var pro = Environment.GetEnvironmentVariable("ProgramFiles(x86)");
+            if (!pro.IsNullOrEmpty() && Directory.Exists(pro))
+            {
+                var msbuild = pro.CombinePath(@"MSBuild\14.0\bin");
+                if (File.Exists(msbuild.CombinePath("csc.exe"))) opts["CompilerDirectoryPath"] = msbuild;
+            }
+            //var provider = CodeDomProvider.CreateProvider("CSharp", opts);
             var provider = CodeDomProvider.CreateProvider("CSharp");
-            //var arg = (String)provider.CreateGenerator().Invoke("CmdArgsFromParameters", options);
-            //XTrace.WriteLine(arg);
-#if !NET4
-            Check35(provider);
-#endif
             return provider.CompileAssemblyFromSource(options, classCode);
-        }
-
-        void Check35(CodeDomProvider provider)
-        {
-            // 如果是2.0，为了使用扩展方法，直接调用3.5编译器
-            if (XTrace.Debug) XTrace.WriteLine("当前环境是2.0，为了使用扩展方法等，准备调用3.5编译器");
-            // 先找到2.0路径，隔壁就是3.5，如果不存在，则下载并解压
-            var dir = System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory();
-            var fdir = dir.AsDirectory().Parent.FullName;
-            dir = fdir.CombinePath("v3.5");
-            var file = dir.CombinePath("csc.exe");
-            if (!Directory.Exists(dir) || !File.Exists(file))
-            {
-                var url = "http://www.newlifex.com/showtopic-1348.aspx";
-                XTrace.WriteLine(".Net 3.5未安装，准备下载绿色版 " + url);
-                var client = new Web.WebClientX(true, true);
-                try
-                {
-                    var zip = client.DownloadLink(url, "csc_v3.5", dir.EnsureDirectory());
-                    if (File.Exists(zip))
-                    {
-                        NewLife.Compression.ZipFile.Extract(zip, dir);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    XTrace.WriteException(ex);
-                }
-            }
-            if (File.Exists(file))
-            {
-                Environment.SetEnvironmentVariable("COMPLUS_InstallRoot", fdir);
-                Environment.SetEnvironmentVariable("COMPLUS_Version", "v3.5");
-                //Environment.SetEnvironmentVariable("COMPLUS_Version", "v4.0.30319");
-
-                //var type = TypeX.GetType("RedistVersionInfo");
-                //var dic = new Dictionary<String, String>();
-                //dic.Add("CompilerVersion", "v3.5");
-                //var path = (String)type.Invoke("GetCompilerPath", dic, "");
-                //XTrace.WriteLine(path);
-
-                //var gen = provider.CreateGenerator();
-                var gen = provider.GetValue("generator") as ICodeGenerator;
-                var provOptions = gen.GetValue("provOptions", false) as IDictionary<string, string>;
-                if (provOptions != null) provOptions["CompilerVersion"] = "v3.5";
-            }
         }
         #endregion
 
@@ -472,12 +452,12 @@ namespace NewLife.Reflection
             // 处理工作目录
             var flag = false;
             var _cur = Environment.CurrentDirectory;
-            var _my = PathHelper.BaseDirectory;
+            var _my = PathHelper.BasePath;
             if (!WorkingDirectory.IsNullOrEmpty())
             {
                 flag = true;
                 Environment.CurrentDirectory = WorkingDirectory;
-                PathHelper.BaseDirectory = WorkingDirectory;
+                PathHelper.BasePath = WorkingDirectory;
             }
 
             try
@@ -489,7 +469,7 @@ namespace NewLife.Reflection
                 if (flag)
                 {
                     Environment.CurrentDirectory = _cur;
-                    PathHelper.BaseDirectory = _my;
+                    PathHelper.BasePath = _my;
                 }
             }
         }
@@ -515,6 +495,8 @@ namespace NewLife.Reflection
                         var len = "using ".Length;
                         line = line.Substring(len, line.Length - len - 1);
                         if (!NameSpaces.Contains(line)) NameSpaces.Add(line);
+                        // 不能截断命名空间，否则报错行号会出错
+                        sb.AppendLine();
                         continue;
                     }
                 }
@@ -530,7 +512,7 @@ namespace NewLife.Reflection
             if (Log != null) Log.Info(format, args);
         }
 
-        static Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
+        static Assembly CurrentDomain_AssemblyResolve(Object sender, ResolveEventArgs args)
         {
             var name = args.Name;
             if (String.IsNullOrEmpty(name)) return null;
@@ -546,3 +528,4 @@ namespace NewLife.Reflection
         #endregion
     }
 }
+#endif

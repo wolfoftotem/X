@@ -1,8 +1,4 @@
 ﻿using System;
-using System.IO;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
 
 namespace NewLife.Net
 {
@@ -13,7 +9,7 @@ namespace NewLife.Net
     public interface ISocketClient : ISocketRemote
     {
         #region 属性
-        /// <summary>超时时间</summary>
+        /// <summary>超时。默认3000ms</summary>
         Int32 Timeout { get; set; }
 
         /// <summary>是否活动</summary>
@@ -21,24 +17,20 @@ namespace NewLife.Net
         #endregion
 
         #region 开关连接
-        /// <summary>打开</summary>
+        /// <summary>打开连接</summary>
         /// <returns>是否成功</returns>
         Boolean Open();
 
-        /// <summary>关闭</summary>
+        /// <summary>关闭连接</summary>
+        /// <param name="reason">关闭原因。便于日志分析</param>
         /// <returns>是否成功</returns>
-        Boolean Close(String reason = null);
+        Boolean Close(String reason);
 
         /// <summary>打开后触发。</summary>
         event EventHandler Opened;
 
         /// <summary>关闭后触发。可实现掉线重连</summary>
         event EventHandler Closed;
-        #endregion
-
-        #region 异步接收
-        /// <summary>是否异步接收数据</summary>
-        Boolean UseReceiveAsync { get; }
         #endregion
     }
 }

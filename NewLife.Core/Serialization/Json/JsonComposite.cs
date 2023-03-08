@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Xml.Serialization;
 using NewLife.Collections;
 using NewLife.Reflection;
+using NewLife.Serialization.Interface;
 
 namespace NewLife.Serialization
 {
@@ -62,7 +63,7 @@ namespace NewLife.Serialization
                     return value + "";
                 case TypeCode.String:
                     if (((String)value).IsNullOrEmpty()) return String.Empty;
-                    return "\"{0}\"".F(value);
+                    return $"\"{value}\"";
                 case TypeCode.Object:
                 default:
                     return null;
@@ -85,16 +86,21 @@ namespace NewLife.Serialization
 
             Host.Hosts.Push(value);
 
+            var context = new AccessorContext { Host = Host, Type = type, Value = value, UserState = Host.UserState };
+
             // 获取成员
             foreach (var member in ms)
             {
                 if (IgnoreMembers != null && IgnoreMembers.Contains(member.Name)) continue;
 
                 var mtype = GetMemberType(member);
-                Host.Member = member;
+                context.Member = Host.Member = member;
 
                 var v = value.GetValue(member);
                 WriteLog("    {0}.{1} {2}", type.Name, member.Name, v);
+
+                // 成员访问器优先
+                if (value is IMemberAccessor ac && ac.Read(Host, context)) continue;
 
                 if (!Host.Write(v, mtype))
                 {
@@ -123,7 +129,7 @@ namespace NewLife.Serialization
             if (Type.GetTypeCode(type) != TypeCode.Object) return false;
             // 不支持基类不是Object的特殊类型
             //if (type.BaseType != typeof(Object)) return false;
-            if (!typeof(Object).IsAssignableFrom(type)) return false;
+            if (!type.As<Object>()) return false;
 
             var ms = GetMembers(type);
             WriteLog("JsonRead类{0} 共有成员{1}个", type.Name, ms.Count);
@@ -132,37 +138,20 @@ namespace NewLife.Serialization
 
             Host.Hosts.Push(value);
 
-            // 成员序列化访问器
-            var ac = value as IMemberAccessor;
+            var context = new AccessorContext { Host = Host, Type = type, Value = value, UserState = Host.UserState };
 
             // 获取成员
-            for (int i = 0; i < ms.Count; i++)
+            for (var i = 0; i < ms.Count; i++)
             {
                 var member = ms[i];
                 if (IgnoreMembers != null && IgnoreMembers.Contains(member.Name)) continue;
 
                 var mtype = GetMemberType(member);
-                Host.Member = member;
+                context.Member = Host.Member = member;
                 WriteLog("    {0}.{1}", member.DeclaringType.Name, member.Name);
 
                 // 成员访问器优先
-                if (ac != null)
-                {
-                    // 访问器直接写入成员
-                    if (ac.Read(Host, member))
-                    {
-                        // 访问器内部可能直接操作Hosts修改了父级对象，典型应用在于某些类需要根据某个字段值决定采用哪个派生类
-                        var obj = Host.Hosts.Peek();
-                        if (obj != value)
-                        {
-                            value = obj;
-                            ms = GetMembers(value.GetType());
-                            ac = value as IMemberAccessor;
-                        }
-
-                        continue;
-                    }
-                }
+                if (value is IMemberAccessor ac && ac.Read(Host, context)) continue;
 
                 Object v = null;
                 if (!Host.TryRead(mtype, ref v))
@@ -193,15 +182,12 @@ namespace NewLife.Serialization
 
         static Type GetMemberType(MemberInfo member)
         {
-            switch (member.MemberType)
+            return member.MemberType switch
             {
-                case MemberTypes.Field:
-                    return (member as FieldInfo).FieldType;
-                case MemberTypes.Property:
-                    return (member as PropertyInfo).PropertyType;
-                default:
-                    throw new NotSupportedException();
-            }
+                MemberTypes.Field => (member as FieldInfo).FieldType,
+                MemberTypes.Property => (member as PropertyInfo).PropertyType,
+                _ => throw new NotSupportedException(),
+            };
         }
         #endregion
     }

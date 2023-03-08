@@ -2,83 +2,227 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
-using System.Globalization;
 using System.Linq;
-using System.Reflection;
+using NewLife.Data;
+using NewLife.Model;
 using NewLife.Reflection;
 
 namespace NewLife.Serialization
 {
     /// <summary>Json读取器</summary>
-    internal class JsonReader
+    /// <remarks>
+    /// 文档 https://www.yuque.com/smartstone/nx/json
+    /// </remarks>
+    public class JsonReader
     {
         #region 属性
+        /// <summary>是否使用UTC时间</summary>
         public Boolean UseUTCDateTime { get; set; }
 
-        #endregion
-
-        #region 构造
-        public JsonReader()
-        {
-            UseUTCDateTime = false;
-        }
+        /// <summary>服务提供者</summary>
+        public IServiceProvider Provider { get; set; } = ObjectContainer.Provider;
         #endregion
 
         #region 转换方法
-        public T ToObject<T>(String json)
-        {
-            return (T)ToObject(json, typeof(T));
-        }
+        /// <summary>读取Json到指定类型</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="json"></param>
+        /// <returns></returns>
+        public T Read<T>(String json) => (T)Read(json, typeof(T));
 
-        public Object ToObject(String json, Type type)
+        /// <summary>读取Json到指定类型</summary>
+        /// <param name="json"></param>
+        /// <param name="type"></param>
+        /// <returns></returns>
+        public Object Read(String json, Type type)
         {
-            Type typeDef = null;
-            if (type != null && type.IsGenericType) typeDef = type.GetGenericTypeDefinition();
-
+            // 解码得到字典或列表
             var obj = new JsonParser(json).Decode();
             if (obj == null) return null;
 
-            if (obj is IDictionary)
-            {
-                if (type != null && typeDef == typeof(IDictionary<,>)) // 字典
-                    return RootDictionary(obj, type);
-                else
-                    return Parse(obj as IDictionary<String, Object>, type, null);
-            }
-            else if (obj is IList<Object>)
-            {
-                if (type != null && typeDef == typeof(IDictionary<,>)) // 名值格式
-                    return RootDictionary(obj, type);
-                else if (type != null && typeDef == typeof(IList<>)) // 泛型列表
-                    return RootList(obj, type);
-                else
-                    return (obj as IList<Object>).ToArray();
-            }
-            else if (type != null && obj.GetType() != type)
-                return ChangeType(obj, type);
+            return ToObject(obj, type, null);
+        }
 
-            return obj;
+        /// <summary>Json字典或列表转为具体类型对象</summary>
+        /// <param name="jobj">Json对象</param>
+        /// <param name="type">模板类型</param>
+        /// <param name="target">目标对象</param>
+        /// <returns></returns>
+        public Object ToObject(Object jobj, Type type, Object target)
+        {
+            if (type == null && target != null) type = target.GetType();
+
+            if (jobj == null || type.IsAssignableFrom(jobj.GetType())) return jobj;
+
+            // Json对象是字典，目标类型可以是字典或复杂对象
+            if (jobj is IDictionary<String, Object> vdic)
+            {
+                if (type.IsDictionary())
+                    return ParseDictionary(vdic, type, target as IDictionary);
+                else
+                    return ParseObject(vdic, type, target);
+            }
+
+            // Json对象是列表，目标类型只能是列表或数组
+            if (jobj is IList<Object> vlist)
+            {
+                if (type.IsList()) return ParseList(vlist, type, target);
+                if (type.IsArray) return ParseArray(vlist, type, target);
+                // 复杂键值的字典，也可能保存为Json数组
+                if (type.IsDictionary()) return CreateDictionary(vlist, type, target);
+
+                if (vlist.Count == 0) return target;
+
+                throw new InvalidCastException($"Json数组无法转为目标类型[{type.FullName}]，仅支持数组和List<T>/IList<T>");
+            }
+
+            if (type != null && jobj.GetType() != type)
+                return ChangeType(jobj, type);
+
+            return jobj;
+        }
+        #endregion
+
+        #region 复杂类型
+        /// <summary>转为泛型列表</summary>
+        /// <param name="vlist"></param>
+        /// <param name="type"></param>
+        /// <param name="target">目标对象</param>
+        /// <returns></returns>
+        private IList ParseList(IList<Object> vlist, Type type, Object target)
+        {
+            var elmType = type.GetGenericArguments().FirstOrDefault();
+
+            // 处理一下type是IList<>的情况
+            if (type.IsInterface) type = typeof(List<>).MakeGenericType(elmType);
+
+            // 创建列表
+            var list = (target ?? type.CreateInstance()) as IList;
+            foreach (var item in vlist)
+            {
+                if (item == null) continue;
+
+                var val = ToObject(item, elmType, null);
+                list.Add(val);
+            }
+            return list;
+        }
+
+        /// <summary>转为数组</summary>
+        /// <param name="list"></param>
+        /// <param name="type"></param>
+        /// <param name="target">目标对象</param>
+        /// <returns></returns>
+        private Array ParseArray(IList<Object> list, Type type, Object target)
+        {
+            var elmType = type?.GetElementTypeEx();
+            if (elmType == null) elmType = typeof(Object);
+
+            if (target is not Array arr) arr = Array.CreateInstance(elmType, list.Count);
+            // 如果源数组有值，则最大只能创建源数组那么多项，抛弃多余项
+            for (var i = 0; i < list.Count && i < arr.Length; i++)
+            {
+                var item = list[i];
+                if (item == null) continue;
+
+                var val = ToObject(item, elmType, arr.GetValue(i));
+                arr.SetValue(val, i);
+            }
+
+            return arr;
+        }
+
+        /// <summary>转为泛型字典</summary>
+        /// <param name="dic"></param>
+        /// <param name="type"></param>
+        /// <param name="target">目标对象</param>
+        /// <returns></returns>
+        private IDictionary ParseDictionary(IDictionary<String, Object> dic, Type type, IDictionary target)
+        {
+            var types = type.GetGenericArguments();
+
+            if (target == null)
+            {
+                // 处理一下type是Dictionary<,>的情况
+                if (type.IsInterface) type = typeof(Dictionary<,>).MakeGenericType(types[0], types[1]);
+
+                target = type.CreateInstance() as IDictionary;
+            }
+            foreach (var kv in dic)
+            {
+                var key = ToObject(kv.Key, types[0], null);
+                var val = ToObject(kv.Value, types[1], null);
+                target.Add(key, val);
+            }
+
+            return target;
+        }
+
+        private readonly Dictionary<Object, Int32> _circobj = new();
+        private readonly Dictionary<Int32, Object> _cirrev = new();
+        /// <summary>字典转复杂对象，反射属性赋值</summary>
+        /// <param name="dic"></param>
+        /// <param name="type"></param>
+        /// <param name="target">目标对象</param>
+        /// <returns></returns>
+        internal Object ParseObject(IDictionary<String, Object> dic, Type type, Object target)
+        {
+            if (type == typeof(NameValueCollection)) return CreateNV(dic);
+            if (type == typeof(StringDictionary)) return CreateSD(dic);
+            if (type == typeof(Object)) return dic;
+
+            if (target == null) target = Provider.GetService(type) ?? type.CreateInstance();
+
+            if (type.IsDictionary()) return CreateDic(dic, type, target);
+
+            if (!_circobj.TryGetValue(target, out var circount))
+            {
+                circount = _circobj.Count + 1;
+                _circobj.Add(target, circount);
+                _cirrev.Add(circount, target);
+            }
+
+            // 扩展属性
+
+            // 遍历所有可用于序列化的属性
+            var props = target.GetType().GetProperties(true).ToDictionary(e => SerialHelper.GetName(e), e => e);
+            foreach (var item in dic)
+            {
+                var v = item.Value;
+                if (v == null) continue;
+
+                if (!props.TryGetValue(item.Key, out var pi))
+                {
+                    // 可能有小写
+                    pi = props.Values.FirstOrDefault(e => e.Name.EqualIgnoreCase(item.Key));
+                    if (pi == null)
+                    {
+                        // 可能有扩展属性
+                        if (target is IExtend ext) ext[item.Key] = item.Value;
+
+                        continue;
+                    }
+                }
+                if (!pi.CanWrite) continue;
+
+                var pt = pi.PropertyType;
+                if (pt.GetTypeCode() != TypeCode.Object)
+                    target.SetValue(pi, ChangeType(v, pt));
+                else
+                {
+                    var orig = target.GetValue(pi);
+                    var val = ToObject(v, pt, orig);
+                    if (val != orig) target.SetValue(pi, val);
+                }
+            }
+            return target;
         }
         #endregion
 
         #region 辅助
         private Object ChangeType(Object value, Type type)
         {
-            if (type == typeof(Int32))
-                return (Int32)((Int64)value);
-
-            else if (type == typeof(Int64))
-                return (Int64)value;
-
-            else if (type == typeof(String))
-                return (String)value;
-
-            else if (type.IsEnum)
-                return Enum.Parse(type, value + "");
-
-            else if (type == typeof(DateTime))
-                return CreateDateTime((String)value);
-
+            // 支持可空类型
             if (type.IsGenericType && type.GetGenericTypeDefinition().Equals(typeof(Nullable<>)))
             {
                 if (value == null) return value;
@@ -86,138 +230,37 @@ namespace NewLife.Serialization
                 type = type.GetGenericArguments()[0];
             }
 
-            if (type == typeof(Guid)) return new Guid((String)value);
+            if (type == typeof(Int32)) return value.ToInt();
+            if (type == typeof(Int64)) return value.ToLong();
+            if (type == typeof(String)) return value + "";
+            if (type == typeof(Type) && value is String str) return Type.GetType(str) ?? Type.GetType("System." + str);
 
-            return Convert.ChangeType(value, type, CultureInfo.InvariantCulture);
-        }
+            if (type.IsEnum) return Enum.Parse(type, value + "");
+            if (type == typeof(DateTime)) return CreateDateTime(value);
 
-        private Object RootList(Object obj, Type type)
-        {
-            var types = type.GetGenericArguments();
-            var list = type.CreateInstance() as IList;
-            foreach (var item in (IList)obj)
+        if (type == typeof(DateTimeOffset)) return value.ToDateTimeOffset();
+
+        if (type == typeof(Guid)) return new Guid((String)value);
+
+            if (type == typeof(Byte[]))
             {
-                var value = item;
-                if (item is IDictionary<String, Object>)
-                    value = Parse(item as IDictionary<String, Object>, types[0], null);
-                else
-                    value = ChangeType(item, types[0]);
+                if (value is Byte[] v) return v;
 
-                list.Add(value);
-            }
-            return list;
-        }
-
-        private Object RootDictionary(Object obj, Type type)
-        {
-            var types = type.GetGenericArguments();
-            Type tkey = null;
-            Type tval = null;
-            if (types != null)
-            {
-                tkey = types[0];
-                tval = types[1];
-            }
-            if (obj is IDictionary<String, Object>)
-            {
-                var dic = type.CreateInstance() as IDictionary;
-
-                foreach (var kv in (IDictionary<String, Object>)obj)
-                {
-                    Object val;
-
-                    if (kv.Value is IDictionary<String, Object>)
-                        val = Parse(kv.Value as IDictionary<String, Object>, tval, null);
-
-                    else if (tval.IsArray)
-                        val = CreateArray((IList<Object>)kv.Value, tval, tval.GetElementType());
-
-                    else if (kv.Value is IList)
-                        val = CreateGenericList((IList<Object>)kv.Value, tval, tkey);
-
-                    else
-                        val = ChangeType(kv.Value, tval);
-
-                    var key = ChangeType(kv.Key, tkey);
-                    dic.Add(key, val);
-                }
-
-                return dic;
-            }
-            if (obj is IList<Object>) return CreateDictionary(obj as IList<Object>, type, types);
-
-            return null;
-        }
-
-        private Dictionary<Object, Int32> _circobj = new Dictionary<Object, Int32>();
-        private Dictionary<Int32, Object> _cirrev = new Dictionary<Int32, Object>();
-        internal Object Parse(IDictionary<String, Object> dic, Type type, Object obj)
-        {
-            if (type == typeof(NameValueCollection)) return CreateNV(dic);
-            if (type == typeof(StringDictionary)) return CreateSD(dic);
-            if (type == typeof(Object)) return dic;
-
-            if (obj == null) obj = type.CreateInstance();
-
-            Int32 circount = 0;
-            if (_circobj.TryGetValue(obj, out circount) == false)
-            {
-                circount = _circobj.Count + 1;
-                _circobj.Add(obj, circount);
-                _cirrev.Add(circount, obj);
+                return Convert.FromBase64String(value + "");
             }
 
-            var props = type.GetProperties(true).ToDictionary(e => e.Name, e => e);
-            foreach (var item in dic)
+            if (type == typeof(Packet))
             {
-                var v = item.Value;
-                PropertyInfo pi;
-                if (!props.TryGetValue(item.Key, out pi))
-                {
-                    // 可能有小写
-                    pi = props.Values.Where(e => e.Name.EqualIgnoreCase(item.Key)).FirstOrDefault();
-                    if (pi == null) continue;
-                }
-                if (!pi.CanWrite) continue;
+                if (value is Packet v) return v;
 
-                if (v == null) continue;
-
-                Object val = null;
-
-                var vdic = v as IDictionary<String, Object>;
-
-                var pt = pi.PropertyType;
-                if (pt.IsEnum)
-                    val = Enum.Parse(pt, v + "");
-                else if (pt == typeof(DateTime))
-                    val = CreateDateTime((String)v);
-                else if (pt == typeof(Guid))
-                    val = new Guid((String)v);
-                else if (pt == typeof(Byte[]))
-                    val = Convert.FromBase64String((String)v);
-                else if (pt.IsArray)
-                    val = CreateArray((IList<Object>)v, pt, pt.GetElementTypeEx());
-                else if (typeof(IList).IsAssignableFrom(pt))
-                    val = CreateGenericList((IList<Object>)v, pt, pt.GetElementTypeEx());
-                else if (pt.IsGenericType && typeof(Dictionary<,>).IsAssignableFrom(pt.GetGenericTypeDefinition()))
-                    val = CreateStringKeyDictionary(vdic, pt, pt.GetGenericArguments());
-                else if (typeof(IDictionary).IsAssignableFrom(pt))
-                    val = CreateDictionary((IList<Object>)v, pt, pt.GetGenericArguments());
-                else if (pt == typeof(NameValueCollection))
-                    val = CreateNV(vdic);
-                else if (pt == typeof(StringDictionary))
-                    val = CreateSD(vdic);
-                else
-                {
-                    if (Type.GetTypeCode(pt) != TypeCode.Object)
-                        val = v;
-                    else
-                        throw new NotSupportedException();
-                }
-
-                obj.SetValue(pi, val);
+                return new Packet(Convert.FromBase64String(value + ""));
             }
-            return obj;
+
+            if (type == typeof(TimeSpan)) return TimeSpan.Parse(value + "");
+
+            if (type.GetTypeCode() == TypeCode.Object) return null;
+
+            return value.ChangeType(type);
         }
 
         private StringDictionary CreateSD(IDictionary<String, Object> dic)
@@ -238,13 +281,31 @@ namespace NewLife.Serialization
             return nv;
         }
 
+        private IDictionary CreateDic(IDictionary<String, Object> dic, Type type, Object obj)
+        {
+            var nv = obj as IDictionary;
+            if (type.IsGenericType && type.GetGenericArguments().Length >= 2)
+            {
+                var tval = type.GetGenericArguments()[1];
+                foreach (var item in dic)
+                    nv.Add(item.Key, item.Value.ChangeType(tval));
+            }
+            else
+            {
+                foreach (var item in dic)
+                    nv.Add(item.Key, item.Value);
+            }
+
+            return nv;
+        }
+
         private Int32 CreateInteger(String str, Int32 index, Int32 count)
         {
-            Int32 num = 0;
-            bool neg = false;
-            for (Int32 x = 0; x < count; x++, index++)
+            var num = 0;
+            var neg = false;
+            for (var x = 0; x < count; x++, index++)
             {
-                char cc = str[index];
+                var cc = str[index];
 
                 if (cc == '-')
                     neg = true;
@@ -253,7 +314,7 @@ namespace NewLife.Serialization
                 else
                 {
                     num *= 10;
-                    num += (Int32)(cc - '0');
+                    num += cc - '0';
                 }
             }
             if (neg) num = -num;
@@ -261,143 +322,76 @@ namespace NewLife.Serialization
             return num;
         }
 
-        private DateTime CreateDateTime(String value)
+        /// <summary>创建时间</summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        private DateTime CreateDateTime(Object value)
         {
-            bool utc = false;
-
-            Int32 year;
-            Int32 month;
-            Int32 day;
-            Int32 hour;
-            Int32 min;
-            Int32 sec;
-            Int32 ms = 0;
-
-            year = CreateInteger(value, 0, 4);
-            month = CreateInteger(value, 5, 2);
-            day = CreateInteger(value, 8, 2);
-            hour = CreateInteger(value, 11, 2);
-            min = CreateInteger(value, 14, 2);
-            sec = CreateInteger(value, 17, 2);
-            if (value.Length > 21 && value[19] == '.')
-                ms = CreateInteger(value, 20, 3);
-
-            if (value[value.Length - 1] == 'Z') utc = true;
-
-            if (!UseUTCDateTime && !utc)
-                return new DateTime(year, month, day, hour, min, sec, ms);
-            else
-                return new DateTime(year, month, day, hour, min, sec, ms, DateTimeKind.Utc).ToLocalTime();
-        }
-
-        private Object CreateArray(IList<Object> list, Type type, Type elmType)
-        {
-            if (elmType == null) elmType = typeof(Object);
-
-            var arr = Array.CreateInstance(elmType, list.Count);
-            for (Int32 i = 0; i < list.Count; i++)
+            if (value is DateTime) return (DateTime)value;
+            if (value is Int64 or Int32)
             {
-                Object ob = list[i];
-                if (ob == null)
+                var dt = value.ToDateTime();
+                if (UseUTCDateTime) dt = dt.ToUniversalTime();
+                return dt;
+            }
+
+            //用于解决奇葩json中时间字段使用了utc时间戳，还是用双引号包裹起来的情况。
+            if (value is String str)
+            {
+                if (str.IsNullOrEmpty()) return DateTime.MinValue;
+
+                if (Int64.TryParse(str, out var result) && result > 0)
                 {
-                    continue;
+                    var sdt = result.ToDateTime();
+                    if (UseUTCDateTime) sdt = sdt.ToUniversalTime();
+                    return sdt;
                 }
-                if (ob is IDictionary)
-                    arr.SetValue(Parse((IDictionary<String, Object>)ob, elmType, null), i);
-                else if (ob is ICollection)
-                    arr.SetValue(CreateArray((IList<Object>)ob, elmType, elmType.GetElementType()), i);
-                else
-                    arr.SetValue(ChangeType(ob, elmType), i);
-            }
 
-            return arr;
-        }
+                // 尝试直转时间
+                var dt = str.ToDateTime();
+                if (dt.Year > 1) return UseUTCDateTime ? dt.ToUniversalTime() : dt;
 
-        private Object CreateGenericList(IList<Object> list, Type type, Type elmType)
-        {
-            var rs = type.CreateInstance() as IList;
-            foreach (Object ob in list)
-            {
-                if (ob is IDictionary)
-                    rs.Add(Parse((IDictionary<String, Object>)ob, elmType, null));
+                var utc = false;
 
-                else if (ob is IList<Object>)
+                var year = 0;
+                var month = 0;
+                var day = 0;
+                var hour = 0;
+                var min = 0;
+                var sec = 0;
+                var ms = 0;
+
+                year = CreateInteger(str, 0, 4);
+                month = CreateInteger(str, 5, 2);
+                day = CreateInteger(str, 8, 2);
+                if (str.Length >= 19)
                 {
-                    if (elmType.IsGenericType)
-                        rs.Add((IList<Object>)ob);
-                    else
-                        rs.Add(((IList<Object>)ob).ToArray());
+                    hour = CreateInteger(str, 11, 2);
+                    min = CreateInteger(str, 14, 2);
+                    sec = CreateInteger(str, 17, 2);
+                    if (str.Length > 21 && str[19] == '.')
+                        ms = CreateInteger(str, 20, 3);
+
+                    if (str[str.Length - 1] == 'Z' || str.EndsWithIgnoreCase("UTC")) utc = true;
                 }
+
+                if (!UseUTCDateTime && !utc)
+                    return new DateTime(year, month, day, hour, min, sec, ms);
                 else
-                    rs.Add(ChangeType(ob, elmType));
+                    return new DateTime(year, month, day, hour, min, sec, ms, DateTimeKind.Utc).ToLocalTime();
             }
-            return rs;
+
+            return DateTime.MinValue;
         }
 
-        private Object CreateStringKeyDictionary(IDictionary<String, Object> dic, Type pt, Type[] types)
+        private Object CreateDictionary(IList<Object> list, Type type, Object target)
         {
-            var rs = pt.CreateInstance() as IDictionary;
-            Type tkey = null;
-            Type tval = null;
-            if (types != null)
-            {
-                tkey = types[0];
-                tval = types[1];
-            }
-
-            foreach (var item in dic)
-            {
-                var key = item.Key;
-                Object val = null;
-
-                if (item.Value is IDictionary<String, Object>)
-                    val = Parse((IDictionary<String, Object>)item.Value, tval, null);
-
-                else if (types != null && tval.IsArray)
-                {
-                    if (item.Value is Array)
-                        val = item.Value;
-                    else
-                        val = CreateArray((IList<Object>)item.Value, tval, tval.GetElementType());
-                }
-                else if (item.Value is IList)
-                    val = CreateGenericList((IList<Object>)item.Value, tval, tkey);
-
-                else
-                    val = ChangeType(item.Value, tval);
-
-                rs.Add(key, val);
-            }
-
-            return rs;
-        }
-
-        private Object CreateDictionary(IList<Object> list, Type pt, Type[] types)
-        {
-            var dic = pt.CreateInstance() as IDictionary;
-            Type tkey = null;
-            Type tval = null;
-            if (types != null)
-            {
-                tkey = types[0];
-                tval = types[1];
-            }
-
+            var types = type.GetGenericArguments();
+            var dic = (target ?? type.CreateInstance()) as IDictionary;
             foreach (IDictionary<String, Object> values in list)
             {
-                Object key = values["k"];
-                Object val = values["v"];
-
-                if (key is IDictionary<String, Object>)
-                    key = Parse((IDictionary<String, Object>)key, tkey, null);
-                else
-                    key = ChangeType(key, tkey);
-
-                if (val is IDictionary<String, Object>)
-                    val = Parse((IDictionary<String, Object>)val, tval, null);
-                else
-                    val = ChangeType(val, tval);
-
+                var key = ToObject(values["k"], types[0], null);
+                var val = ToObject(values["v"], types[1], null);
                 dic.Add(key, val);
             }
 

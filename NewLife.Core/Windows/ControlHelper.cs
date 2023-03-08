@@ -1,6 +1,9 @@
-﻿using System.Drawing;
+﻿#if __WIN__
+using System.Drawing;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using NewLife.Log;
 using NewLife.Reflection;
 using NewLife.Threading;
 
@@ -90,6 +93,7 @@ namespace System.Windows.Forms
         #endregion
 
         #region 文本控件扩展
+        private static readonly Regex _line = new("(?:[^\n])\r", RegexOptions.Compiled);
         /// <summary>附加文本到文本控件末尾。主要解决非UI线程以及滚动控件等问题</summary>
         /// <param name="txt">控件</param>
         /// <param name="msg">消息</param>
@@ -119,6 +123,23 @@ namespace System.Windows.Forms
                         //ProcessReturn(txt, ref m);
 
                         m = m.Trim('\0');
+                        // 针对非Windows系统到来的数据，处理一下换行
+                        if (txt is RichTextBox && Environment.NewLine == "\r\n")
+                        {
+                            // 合并多个回车
+                            while (m.Contains("\r\r")) m = m.Replace("\r\r", "\r");
+                            //while (m.Contains("\n\r")) m = m.Replace("\n\r", "\r\n");
+                            //m = m.Replace("\r\n", "<TagOfLine>");
+                            m = m.Replace("\r\n", "\n");
+                            //m = m.Replace("\r", "\r\n");
+                            m = m.Replace("\n\r", "\n");
+                            // 单独的\r换成\n
+                            //if (_line.IsMatch(m))
+                            //    m = _line.Replace(m, "\n");
+                            m = m.Replace("\r", "\n");
+                            //m = m.Replace("\r", null);
+                            //m = m.Replace("<TagOfLine>", "\r\n");
+                        }
                         if (String.IsNullOrEmpty(m)) return;
                         txt.AppendText(m);
                     }
@@ -281,10 +302,10 @@ namespace System.Windows.Forms
         }
 
         [DllImport("user32.dll")]
-        static extern int SendMessage(IntPtr hwnd, int wMsg, int wParam, int lParam);
-        private const int SB_TOP = 6;
-        private const int SB_BOTTOM = 7;
-        private const int WM_VSCROLL = 0x115;
+        static extern Int32 SendMessage(IntPtr hwnd, Int32 wMsg, Int32 wParam, Int32 lParam);
+        private const Int32 SB_TOP = 6;
+        private const Int32 SB_BOTTOM = 7;
+        private const Int32 WM_VSCROLL = 0x115;
         #endregion
 
         #region 设置控件样式
@@ -313,13 +334,13 @@ namespace System.Windows.Forms
 
         #region 文本控件着色
         //Int32 _pColor = 0;
-        static Color _Key = Color.FromArgb(255, 170, 0);
-        static Color _Num = Color.FromArgb(255, 58, 131);
-        static Color _KeyName = Color.FromArgb(0, 255, 255);
+        static readonly Color _Key = Color.FromArgb(255, 170, 0);
+        static readonly Color _Num = Color.FromArgb(255, 58, 131);
+        static readonly Color _KeyName = Color.FromArgb(0, 255, 255);
 
-        static String[] _Keys = new String[] { 
-            "(", ")", "{", "}", "[", "]", "*", "->", "+", "-", "*", "/", "\\", "%", "&", "|", "!", "=", ";", ",", ">", "<", 
-            "void", "new", "delete", "true", "false" 
+        static readonly String[] _Keys = new String[] {
+            "(", ")", "{", "}", "[", "]", "*", "->", "+", "-", "*", "/", "\\", "%", "&", "|", "!", "=", ";", ",", ">", "<",
+            "void", "new", "delete", "true", "false"
         };
 
         /// <summary>采用默认着色方案进行着色</summary>
@@ -352,9 +373,9 @@ namespace System.Windows.Forms
             return start;
         }
 
-        static void ChangeColor(RichTextBox rtb, Int32 start, string text, Color color)
+        static void ChangeColor(RichTextBox rtb, Int32 start, String text, Color color)
         {
-            int s = start;
+            var s = start;
             //while ((-1 + text.Length - 1) != (s = text.Length - 1 + rtx.Find(text, s, -1, RichTextBoxFinds.WholeWord)))
             while (true)
             {
@@ -372,7 +393,7 @@ namespace System.Windows.Forms
         }
 
         // 正则匹配，数字开头的词。支持0x开头的十六进制
-        static Regex _reg = new Regex(@"(?i)\b(0x|[0-9])([0-9a-fA-F\-]*)(.*?)\b", RegexOptions.Compiled);
+        static readonly Regex _reg = new(@"(?i)\b(0x|[0-9])([0-9a-fA-F\-]*)(.*?)\b", RegexOptions.Compiled);
         static void ChangeNumColor(RichTextBox rtb, Int32 start)
         {
             //var ms = _reg.Matches(rtb.Text, start);
@@ -392,7 +413,7 @@ namespace System.Windows.Forms
             rtb.Colour(_reg, start, _Num, _Num, _Key);
         }
 
-        static Regex _reg2 = new Regex(@"(?i)(\b\w+\b)(\s*::\s*)(\b\w+\b)", RegexOptions.Compiled);
+        static readonly Regex _reg2 = new(@"(?i)(\b\w+\b)(\s*::\s*)(\b\w+\b)", RegexOptions.Compiled);
         /// <summary>改变C++类名方法名颜色</summary>
         static void ChangeCppColor(RichTextBox rtb, Int32 start)
         {
@@ -416,7 +437,7 @@ namespace System.Windows.Forms
             rtb.Colour(_reg2, start, color, _Key, color3);
         }
 
-        static Regex _reg3 = new Regex(@"(?i)(\b\w+\b)(\s*[=:])[^:]\s*", RegexOptions.Compiled);
+        static readonly Regex _reg3 = new(@"(?i)(\b\w+\b)(\s*[=:])[^:]\s*", RegexOptions.Compiled);
         static void ChangeKeyNameColor(RichTextBox rtb, Int32 start)
         {
             //var ms = _reg3.Matches(rtx.Text, _pColor);
@@ -459,7 +480,7 @@ namespace System.Windows.Forms
                 else
                 {
                     // 遍历匹配组，注意0号代表整体
-                    for (int i = 1; i < item.Groups.Count; i++)
+                    for (var i = 1; i < item.Groups.Count; i++)
                     {
                         rtb.Select(item.Groups[i].Index, item.Groups[i].Length);
                         rtb.SelectionColor = colors[i - 1];
@@ -483,5 +504,37 @@ namespace System.Windows.Forms
             return Colour(rtb, r, start, colors);
         }
         #endregion
+
+        #region DPI修复
+        /// <summary>当前Dpi</summary>
+        public static Int32 Dpi { get; set; }
+
+        /// <summary>修正ListView的Dpi</summary>
+        /// <param name="lv"></param>
+        public static void FixDpi(this ListView lv)
+        {
+            if (Dpi == 0) Dpi = (Int32)lv.CreateGraphics().DpiX;
+
+            foreach (ColumnHeader item in lv.Columns)
+            {
+                item.Width *= Dpi / 96;
+            }
+        }
+
+        /// <summary>修正窗体的Dpi</summary>
+        /// <param name="frm"></param>
+        public static void FixDpi(this Form frm)
+        {
+            // 只要重新设置一次字体，就可以适配高Dpi，不晓得为啥
+            frm.Font = new Font("宋体", 9F, FontStyle.Regular, GraphicsUnit.Point, 134);
+
+            foreach (var fi in frm.GetType().GetFields(BindingFlags.Instance | BindingFlags.NonPublic))
+            {
+                if (fi.FieldType == typeof(ListView) && frm.GetValue(fi) is ListView lv)
+                    lv.FixDpi();
+            }
+        }
+        #endregion
     }
 }
+#endif

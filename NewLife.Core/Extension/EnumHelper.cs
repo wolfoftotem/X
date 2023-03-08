@@ -1,8 +1,10 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Reflection;
+using NewLife;
 
-namespace System
+namespace NewLife
 {
     /// <summary>枚举类型助手类</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
@@ -16,7 +18,7 @@ namespace System
         {
             if (value.GetType() != flag.GetType()) throw new ArgumentException("flag", "枚举标识判断必须是相同的类型！");
 
-            UInt64 num = Convert.ToUInt64(flag);
+            var num = Convert.ToUInt64(flag);
             return (Convert.ToUInt64(value) & num) == num;
         }
 
@@ -28,10 +30,10 @@ namespace System
         /// <returns></returns>
         public static T Set<T>(this Enum source, T flag, Boolean value)
         {
-            if (!(source is T)) throw new ArgumentException("source", "枚举标识判断必须是相同的类型！");
+            if (source is not T) throw new ArgumentException("source", "枚举标识判断必须是相同的类型！");
 
-            UInt64 s = Convert.ToUInt64(source);
-            UInt64 f = Convert.ToUInt64(flag);
+            var s = Convert.ToUInt64(source);
+            var f = Convert.ToUInt64(flag);
 
             if (value)
             {
@@ -50,9 +52,12 @@ namespace System
         /// <returns></returns>
         public static String GetDescription(this Enum value)
         {
+            if (value == null) return null;
+
             var type = value.GetType();
             var item = type.GetField(value.ToString(), BindingFlags.Public | BindingFlags.Static);
-
+            //云飞扬 2017-07-06 传的枚举值可能并不存在，需要判断是否为null
+            if (item == null) return null;
             //var att = AttributeX.GetCustomAttribute<DescriptionAttribute>(item, false);
             var att = item.GetCustomAttribute<DescriptionAttribute>(false);
             if (att != null && !String.IsNullOrEmpty(att.Description)) return att.Description;
@@ -69,7 +74,7 @@ namespace System
 
             foreach (var item in GetDescriptions(typeof(TEnum)))
             {
-                dic.Add((TEnum)(Object)item.Key, item.Value);
+                dic.Add((TEnum)Enum.ToObject(typeof(TEnum), item.Key), item.Value);
             }
 
             return dic;
@@ -88,9 +93,9 @@ namespace System
                 // 这里的快速访问方法会报错
                 //FieldInfoX fix = FieldInfoX.Create(item);
                 //PermissionFlags value = (PermissionFlags)fix.GetValue(null);
-                Int32 value = Convert.ToInt32(item.GetValue(null));
+                var value = Convert.ToInt32(item.GetValue(null));
 
-                String des = item.Name;
+                var des = item.Name;
 
                 //var dna = AttributeX.GetCustomAttribute<DisplayNameAttribute>(item, false);
                 var dna = item.GetCustomAttribute<DisplayNameAttribute>(false);

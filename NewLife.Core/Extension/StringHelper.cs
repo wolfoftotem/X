@@ -1,21 +1,28 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
+using NewLife.Collections;
 using NewLife.Log;
 
-namespace System
+#nullable enable
+namespace NewLife
 {
     /// <summary>字符串助手类</summary>
+    /// <remarks>
+    /// 文档 https://www.yuque.com/smartstone/nx/string_helper
+    /// </remarks>
     public static class StringHelper
     {
         #region 字符串扩展
-        /// <summary>忽略大小写的字符串相等比较，判断是否以任意一个待比较字符串相等</summary>
+        /// <summary>忽略大小写的字符串相等比较，判断是否与任意一个待比较字符串相等</summary>
         /// <param name="value">字符串</param>
         /// <param name="strs">待比较字符串数组</param>
         /// <returns></returns>
-        public static Boolean EqualIgnoreCase(this String value, params String[] strs)
+        public static Boolean EqualIgnoreCase(this String? value, params String[] strs)
         {
             foreach (var item in strs)
             {
@@ -24,13 +31,13 @@ namespace System
             return false;
         }
 
-        /// <summary>忽略大小写的字符串开始比较，判断是否以任意一个待比较字符串开始</summary>
+        /// <summary>忽略大小写的字符串开始比较，判断是否与任意一个待比较字符串开始</summary>
         /// <param name="value">字符串</param>
         /// <param name="strs">待比较字符串数组</param>
         /// <returns></returns>
-        public static Boolean StartsWithIgnoreCase(this String value, params String[] strs)
+        public static Boolean StartsWithIgnoreCase(this String? value, params String[] strs)
         {
-            if (String.IsNullOrEmpty(value)) return false;
+            if (value == null || String.IsNullOrEmpty(value)) return false;
 
             foreach (var item in strs)
             {
@@ -43,9 +50,9 @@ namespace System
         /// <param name="value">字符串</param>
         /// <param name="strs">待比较字符串数组</param>
         /// <returns></returns>
-        public static Boolean EndsWithIgnoreCase(this String value, params String[] strs)
+        public static Boolean EndsWithIgnoreCase(this String? value, params String[] strs)
         {
-            if (String.IsNullOrEmpty(value)) return false;
+            if (value == null || String.IsNullOrEmpty(value)) return false;
 
             foreach (var item in strs)
             {
@@ -57,16 +64,16 @@ namespace System
         /// <summary>指示指定的字符串是 null 还是 String.Empty 字符串</summary>
         /// <param name="value">字符串</param>
         /// <returns></returns>
-        public static Boolean IsNullOrEmpty(this String value) { return value == null || value.Length <= 0; }
+        public static Boolean IsNullOrEmpty(this String? value) => value == null || value.Length <= 0;
 
         /// <summary>是否空或者空白字符串</summary>
         /// <param name="value">字符串</param>
         /// <returns></returns>
-        public static Boolean IsNullOrWhiteSpace(this String value)
+        public static Boolean IsNullOrWhiteSpace(this String? value)
         {
             if (value != null)
             {
-                for (int i = 0; i < value.Length; i++)
+                for (var i = 0; i < value.Length; i++)
                 {
                     if (!Char.IsWhiteSpace(value[i])) return false;
                 }
@@ -78,9 +85,10 @@ namespace System
         /// <param name="value">字符串</param>
         /// <param name="separators">分组分隔符，默认逗号分号</param>
         /// <returns></returns>
-        public static String[] Split(this String value, params String[] separators)
+        public static String[] Split(this String? value, params String[] separators)
         {
-            if (String.IsNullOrEmpty(value)) return new String[0];
+            //!! netcore3.0中新增Split(String? separator, StringSplitOptions options = StringSplitOptions.None)，优先于StringHelper扩展
+            if (value == null || String.IsNullOrEmpty(value)) return new String[0];
             if (separators == null || separators.Length < 1 || separators.Length == 1 && separators[0].IsNullOrEmpty()) separators = new String[] { ",", ";" };
 
             return value.Split(separators, StringSplitOptions.RemoveEmptyEntries);
@@ -91,17 +99,16 @@ namespace System
         /// <param name="value">字符串</param>
         /// <param name="separators">分组分隔符，默认逗号分号</param>
         /// <returns></returns>
-        public static Int32[] SplitAsInt(this String value, params String[] separators)
+        public static Int32[] SplitAsInt(this String? value, params String[] separators)
         {
-            if (String.IsNullOrEmpty(value)) return new Int32[0];
+            if (value == null || String.IsNullOrEmpty(value)) return new Int32[0];
             if (separators == null || separators.Length < 1) separators = new String[] { ",", ";" };
 
             var ss = value.Split(separators, StringSplitOptions.RemoveEmptyEntries);
             var list = new List<Int32>();
             foreach (var item in ss)
             {
-                var id = 0;
-                if (!Int32.TryParse(item.Trim(), out id)) continue;
+                if (!Int32.TryParse(item.Trim(), out var id)) continue;
 
                 // 本意只是拆分字符串然后转为数字，不应该过滤重复项
                 //if (!list.Contains(id))
@@ -111,21 +118,22 @@ namespace System
             return list.ToArray();
         }
 
-        /// <summary>拆分字符串成为名值字典。逗号分号分组，等号分隔</summary>
+        /// <summary>拆分字符串成为不区分大小写的可空名值字典。逗号分号分组，等号分隔</summary>
         /// <param name="value">字符串</param>
         /// <param name="nameValueSeparator">名值分隔符，默认等于号</param>
         /// <param name="separators">分组分隔符，默认逗号分号</param>
         /// <returns></returns>
-        public static IDictionary<String, String> SplitAsDictionary(this String value, String nameValueSeparator = "=", params String[] separators)
+        [Obsolete("该扩展容易带来误解")]
+        public static IDictionary<String, String> SplitAsDictionary(this String? value, String nameValueSeparator = "=", params String[] separators)
         {
-            var dic = new Dictionary<String, String>();
-            if (value.IsNullOrWhiteSpace()) return dic;
+            var dic = new NullableDictionary<String, String>(StringComparer.OrdinalIgnoreCase);
+            if (value == null || value.IsNullOrWhiteSpace()) return dic;
 
             if (String.IsNullOrEmpty(nameValueSeparator)) nameValueSeparator = "=";
-            if (separators == null || separators.Length < 1) separators = new String[] { ",", ";" };
+            if (separators == null || separators.Length == 0) separators = new String[] { ",", ";" };
 
             var ss = value.Split(separators, StringSplitOptions.RemoveEmptyEntries);
-            if (ss == null || ss.Length < 1) return null;
+            if (ss == null || ss.Length == 0) return dic;
 
             foreach (var item in ss)
             {
@@ -140,13 +148,104 @@ namespace System
             return dic;
         }
 
+        /// <summary>拆分字符串成为不区分大小写的可空名值字典。逗号分组，等号分隔</summary>
+        /// <param name="value">字符串</param>
+        /// <param name="nameValueSeparator">名值分隔符，默认等于号</param>
+        /// <param name="separator">分组分隔符，默认分号</param>
+        /// <param name="trimQuotation">去掉括号</param>
+        /// <returns></returns>
+        public static IDictionary<String, String> SplitAsDictionary(this String? value, String nameValueSeparator = "=", String separator = ";", Boolean trimQuotation = false)
+        {
+            var dic = new NullableDictionary<String, String>(StringComparer.OrdinalIgnoreCase);
+            if (value == null || value.IsNullOrWhiteSpace()) return dic;
+
+            if (nameValueSeparator.IsNullOrEmpty()) nameValueSeparator = "=";
+            //if (separator == null || separator.Length < 1) separator = new String[] { ",", ";" };
+
+            var ss = value.Split(new[] { separator }, StringSplitOptions.RemoveEmptyEntries);
+            if (ss == null || ss.Length < 1) return dic;
+
+            var k = 0;
+            foreach (var item in ss)
+            {
+                var p = item.IndexOf(nameValueSeparator);
+                if (p <= 0)
+                {
+                    dic[$"[{k}]"] = item;
+                    k++;
+                    continue;
+                }
+
+                var key = item.Substring(0, p).Trim();
+                var val = item.Substring(p + nameValueSeparator.Length).Trim();
+
+                // 处理单引号双引号
+                if (trimQuotation && !val.IsNullOrEmpty())
+                {
+                    if (val[0] == '\'' && val[val.Length - 1] == '\'') val = val.Trim('\'');
+                    if (val[0] == '"' && val[val.Length - 1] == '"') val = val.Trim('"');
+                }
+
+                k++;
+                //dic[key] = val;
+#if NETFRAMEWORK || NETSTANDARD2_0
+                if (!dic.ContainsKey(key)) dic.Add(key, val);
+#else
+                dic.TryAdd(key, val);
+#endif
+            }
+
+            return dic;
+        }
+
+        /// <summary>
+        /// 在.netCore需要区分该部分内容
+        /// </summary>
+        /// <param name="value"></param>
+        /// <param name="nameValueSeparator"></param>
+        /// <param name="separator"></param>
+        /// <param name="trimQuotation"></param>
+        /// <returns></returns>
+        public static IDictionary<String, String> SplitAsDictionaryT(this String? value, Char nameValueSeparator = '=', Char separator = ';', Boolean trimQuotation = false)
+        {
+            var dic = new NullableDictionary<String, String>(StringComparer.OrdinalIgnoreCase);
+            if (value == null || value.IsNullOrWhiteSpace()) return dic;
+
+            //if (nameValueSeparator == null) nameValueSeparator = '=';
+            //if (separator == null || separator.Length < 1) separator = new String[] { ",", ";" };
+
+            var ss = value.Split(new[] { separator }, StringSplitOptions.RemoveEmptyEntries);
+            if (ss == null || ss.Length < 1) return dic;
+
+            foreach (var item in ss)
+            {
+                var p = item.IndexOf(nameValueSeparator);
+                if (p <= 0) continue;
+
+                var key = item.Substring(0, p).Trim();
+                var val = item.Substring(p + 1).Trim();
+
+
+                // 处理单引号双引号
+                if (trimQuotation && !val.IsNullOrEmpty())
+                {
+                    if (val[0] == '\'' && val[val.Length - 1] == '\'') val = val.Trim('\'');
+                    if (val[0] == '"' && val[val.Length - 1] == '"') val = val.Trim('"');
+                }
+
+                dic[key] = val;
+            }
+
+            return dic;
+        }
+
         /// <summary>把一个列表组合成为一个字符串，默认逗号分隔</summary>
         /// <param name="value"></param>
         /// <param name="separator">组合分隔符，默认逗号</param>
         /// <returns></returns>
         public static String Join(this IEnumerable value, String separator = ",")
         {
-            var sb = new StringBuilder();
+            var sb = Pool.StringBuilder.Get();
             if (value != null)
             {
                 foreach (var item in value)
@@ -154,26 +253,46 @@ namespace System
                     sb.Separate(separator).Append(item + "");
                 }
             }
-            return sb.ToString();
+            return sb.Put(true);
         }
+
+        ///// <summary>把一个列表组合成为一个字符串，默认逗号分隔</summary>
+        ///// <param name="value"></param>
+        ///// <param name="separator">组合分隔符，默认逗号</param>
+        ///// <param name="func">把对象转为字符串的委托</param>
+        ///// <returns></returns>
+        //[Obsolete]
+        //public static String Join<T>(this IEnumerable<T> value, String separator, Func<T, String>? func)
+        //{
+        //    var sb = Pool.StringBuilder.Get();
+        //    if (value != null)
+        //    {
+        //        if (func == null) func = obj => obj + "";
+        //        foreach (var item in value)
+        //        {
+        //            sb.Separate(separator).Append(func(item));
+        //        }
+        //    }
+        //    return sb.Put(true);
+        //}
 
         /// <summary>把一个列表组合成为一个字符串，默认逗号分隔</summary>
         /// <param name="value"></param>
         /// <param name="separator">组合分隔符，默认逗号</param>
         /// <param name="func">把对象转为字符串的委托</param>
         /// <returns></returns>
-        public static String Join<T>(this IEnumerable<T> value, String separator = ",", Func<T, String> func = null)
+        public static String Join<T>(this IEnumerable<T> value, String separator = ",", Func<T, Object?>? func = null)
         {
-            var sb = new StringBuilder();
+            var sb = Pool.StringBuilder.Get();
             if (value != null)
             {
-                if (func == null) func = obj => obj + "";
+                if (func == null) func = obj => obj;
                 foreach (var item in value)
                 {
                     sb.Separate(separator).Append(func(item));
                 }
             }
-            return sb.ToString();
+            return sb.Put(true);
         }
 
         /// <summary>追加分隔符字符串，忽略开头，常用于拼接</summary>
@@ -182,7 +301,7 @@ namespace System
         /// <returns></returns>
         public static StringBuilder Separate(this StringBuilder sb, String separator)
         {
-            if (sb == null || String.IsNullOrEmpty(separator)) return sb;
+            if (/*sb == null ||*/ String.IsNullOrEmpty(separator)) return sb;
 
             if (sb.Length > 0) sb.Append(separator);
 
@@ -193,10 +312,10 @@ namespace System
         /// <param name="value">字符串</param>
         /// <param name="encoding">编码，默认utf-8无BOM</param>
         /// <returns></returns>
-        public static Byte[] GetBytes(this String value, Encoding encoding = null)
+        public static Byte[] GetBytes(this String? value, Encoding? encoding = null)
         {
-            if (value == null) return null;
-            if (value == String.Empty) return new Byte[0];
+            //if (value == null) return null;
+            if (String.IsNullOrEmpty(value)) return new Byte[0];
 
             if (encoding == null) encoding = Encoding.UTF8;
             return encoding.GetBytes(value);
@@ -206,132 +325,73 @@ namespace System
         /// <param name="value">格式字符串</param>
         /// <param name="args">参数</param>
         /// <returns></returns>
-        //public static String Format(this String value, params Object[] args)
-        public static String F(this String value, params Object[] args)
+        [Obsolete("建议使用插值字符串")]
+        public static String F(this String value, params Object?[] args)
         {
             if (String.IsNullOrEmpty(value)) return value;
 
             // 特殊处理时间格式化。这些年，无数项目实施因为时间格式问题让人发狂
-            for (int i = 0; i < args.Length; i++)
+            for (var i = 0; i < args.Length; i++)
             {
-                if (args[i] is DateTime)
+                if (args[i] is DateTime dt)
                 {
                     // 没有写格式化字符串的时间参数，一律转为标准时间字符串
-                    if (value.Contains("{" + i + "}")) args[i] = ((DateTime)args[i]).ToFullString();
+                    if (value.Contains("{" + i + "}")) args[i] = dt.ToFullString();
                 }
             }
 
             return String.Format(value, args);
         }
+
+        /// <summary>指定输入是否匹配目标表达式，支持*匹配</summary>
+        /// <param name="pattern">匹配表达式</param>
+        /// <param name="input">输入字符串</param>
+        /// <param name="comparisonType">字符串比较方式</param>
+        /// <returns></returns>
+        public static Boolean IsMatch(this String pattern, String input, StringComparison comparisonType = StringComparison.CurrentCulture)
+        {
+            if (pattern.IsNullOrEmpty() || input.IsNullOrEmpty()) return false;
+
+            // 普通表达式，直接包含
+            var p = pattern.IndexOf('*');
+            if (p < 0) return String.Equals(input, pattern, comparisonType);
+
+            // 表达式分组
+            var ps = pattern.Split('*');
+
+            // 头尾专用匹配
+            if (ps.Length == 2)
+            {
+                if (p == 0) return input.EndsWith(ps[1], comparisonType);
+                if (p == pattern.Length - 1) return input.StartsWith(ps[0], comparisonType);
+            }
+
+            // 逐项跳跃式匹配
+            p = 0;
+            for (var i = 0; i < ps.Length; i++)
+            {
+                // 最后一组反向匹配
+                if (i == ps.Length - 1)
+                    p = input.LastIndexOf(ps[i], input.Length - 1, input.Length - p, comparisonType);
+                else
+                    p = input.IndexOf(ps[i], p, comparisonType);
+                if (p < 0) return false;
+
+                // 第一组必须开头
+                if (i == 0 && p > 0) return false;
+
+                p += ps[i].Length;
+            }
+
+            // 最后一组*允许不到边界
+            if (ps[ps.Length - 1].IsNullOrEmpty()) return p <= input.Length;
+
+            // 最后一组必须结尾
+            return p == input.Length;
+        }
         #endregion
 
         #region 截取扩展
-        ///// <summary>截取左边若干长度字符串</summary>
-        ///// <param name="str"></param>
-        ///// <param name="length"></param>
-        ///// <returns></returns>
-        //public static String Left(this String str, Int32 length)
-        //{
-        //    if (String.IsNullOrEmpty(str) || length <= 0) return str;
-
-        //    // 纠正长度
-        //    if (str.Length <= length) return str;
-
-        //    return str.Substring(0, length);
-        //}
-
-        ///// <summary>截取左边若干长度字符串（二进制计算长度）</summary>
-        ///// <param name="str"></param>
-        ///// <param name="length"></param>
-        ///// <param name="strict">严格模式时，遇到截断位置位于一个字符中间时，忽略该字符，否则包括该字符</param>
-        ///// <returns></returns>
-        //public static String LeftBinary(this String str, Int32 length, Boolean strict = true)
-        //{
-        //    if (String.IsNullOrEmpty(str) || length <= 0) return str;
-
-        //    // 纠正长度
-        //    if (str.Length <= length) return str;
-
-        //    var encoding = Encoding.Default;
-
-        //    var buf = encoding.GetBytes(str);
-        //    if (buf.Length < length) return str;
-
-        //    // 计算截取字符长度。避免把一个字符劈开
-        //    var clen = 0;
-        //    while (true)
-        //    {
-        //        try
-        //        {
-        //            clen = encoding.GetCharCount(buf, 0, length);
-        //            break;
-        //        }
-        //        catch (DecoderFallbackException)
-        //        {
-        //            // 发生了回退，减少len再试
-        //            length--;
-        //        }
-        //    }
-        //    // 可能过长，修正
-        //    if (strict) while (encoding.GetByteCount(str.ToCharArray(), 0, clen) > length) clen--;
-
-        //    return str.Substring(0, clen);
-        //}
-
-        ///// <summary>截取右边若干长度字符串</summary>
-        ///// <param name="str"></param>
-        ///// <param name="length"></param>
-        ///// <returns></returns>
-        //public static String Right(this String str, Int32 length)
-        //{
-        //    if (String.IsNullOrEmpty(str) || length <= 0) return str;
-
-        //    // 纠正长度
-        //    if (str.Length <= length) return str;
-
-        //    return str.Substring(str.Length - length, length);
-        //}
-
-        ///// <summary>截取右边若干长度字符串（二进制计算长度）</summary>
-        ///// <param name="str"></param>
-        ///// <param name="length"></param>
-        ///// <param name="strict">严格模式时，遇到截断位置位于一个字符中间时，忽略该字符，否则包括该字符</param>
-        ///// <returns></returns>
-        //public static String RightBinary(this String str, Int32 length, Boolean strict = true)
-        //{
-        //    if (String.IsNullOrEmpty(str) || length <= 0) return str;
-
-        //    // 纠正长度
-        //    if (str.Length <= length) return str;
-
-        //    var encoding = Encoding.Default;
-
-        //    var buf = encoding.GetBytes(str);
-        //    if (buf.Length < length) return str;
-
-        //    // 计算截取字符长度。避免把一个字符劈开
-        //    var clen = 0;
-        //    while (true)
-        //    {
-        //        try
-        //        {
-        //            clen = encoding.GetCharCount(buf, buf.Length - length, length);
-        //            break;
-        //        }
-        //        catch (DecoderFallbackException)
-        //        {
-        //            // 发生了回退，减少len再试
-        //            length--;
-        //        }
-        //    }
-        //    //// 可能过长，修正
-        //    //if (strict) while (encoding.GetByteCount(str.ToCharArray(), str.Length - clen, clen) > length) clen--;
-        //    // 可能过短，修正
-        //    if (!strict) while (encoding.GetByteCount(str.ToCharArray(), str.Length - clen, clen) < length) clen++;
-
-        //    return str.Substring(str.Length - clen, clen);
-        //}
-
         /// <summary>确保字符串以指定的另一字符串开始，不区分大小写</summary>
         /// <param name="str">字符串</param>
         /// <param name="start"></param>
@@ -369,7 +429,7 @@ namespace System
             if (String.IsNullOrEmpty(str)) return str;
             if (starts == null || starts.Length < 1 || String.IsNullOrEmpty(starts[0])) return str;
 
-            for (int i = 0; i < starts.Length; i++)
+            for (var i = 0; i < starts.Length; i++)
             {
                 if (str.StartsWith(starts[i], StringComparison.OrdinalIgnoreCase))
                 {
@@ -392,7 +452,7 @@ namespace System
             if (String.IsNullOrEmpty(str)) return str;
             if (ends == null || ends.Length < 1 || String.IsNullOrEmpty(ends[0])) return str;
 
-            for (int i = 0; i < ends.Length; i++)
+            for (var i = 0; i < ends.Length; i++)
             {
                 if (str.EndsWith(ends[i], StringComparison.OrdinalIgnoreCase))
                 {
@@ -414,7 +474,7 @@ namespace System
         /// <param name="startIndex">搜索的开始位置</param>
         /// <param name="positions">位置数组，两个元素分别记录头尾位置</param>
         /// <returns></returns>
-        public static String Substring(this String str, String after, String before = null, Int32 startIndex = 0, Int32[] positions = null)
+        public static String? Substring(this String str, String after, String? before = null, Int32 startIndex = 0, Int32[]? positions = null)
         {
             if (String.IsNullOrEmpty(str)) return str;
             if (String.IsNullOrEmpty(after) && String.IsNullOrEmpty(before)) return str;
@@ -455,58 +515,16 @@ namespace System
         /// <param name="maxLength">截取后字符串的最大允许长度，包含后面填充</param>
         /// <param name="pad">需要填充在后面的字符串，比如几个圆点</param>
         /// <returns></returns>
-        public static String Cut(this String str, Int32 maxLength, String pad = null)
+        public static String Cut(this String str, Int32 maxLength, String? pad = null)
         {
             if (String.IsNullOrEmpty(str) || maxLength <= 0 || str.Length < maxLength) return str;
 
             // 计算截取长度
             var len = maxLength;
-            if (!String.IsNullOrEmpty(pad)) len -= pad.Length;
-            if (len <= 0) return pad;
+            if (pad != null && !String.IsNullOrEmpty(pad)) len -= pad.Length;
+            if (len <= 0) throw new ArgumentOutOfRangeException(nameof(maxLength));
 
             return str.Substring(0, len) + pad;
-        }
-
-        /// <summary>根据最大长度截取字符串（二进制计算长度），并允许以指定空白填充末尾</summary>
-        /// <remarks>默认采用Default编码进行处理，其它编码请参考本函数代码另外实现</remarks>
-        /// <param name="str">字符串</param>
-        /// <param name="maxLength">截取后字符串的最大允许长度，包含后面填充</param>
-        /// <param name="pad">需要填充在后面的字符串，比如几个圆点</param>
-        /// <param name="strict">严格模式时，遇到截断位置位于一个字符中间时，忽略该字符，否则包括该字符。默认true</param>
-        /// <returns></returns>
-        public static String CutBinary(this String str, Int32 maxLength, String pad = null, Boolean strict = true)
-        {
-            if (String.IsNullOrEmpty(str) || maxLength <= 0 || str.Length < maxLength) return str;
-
-            var encoding = Encoding.Default;
-
-            var buf = encoding.GetBytes(str);
-            if (buf.Length < maxLength) return str;
-
-            // 计算截取字节长度
-            var len = maxLength;
-            if (!String.IsNullOrEmpty(pad)) len -= encoding.GetByteCount(pad);
-            if (len <= 0) return pad;
-
-            // 计算截取字符长度。避免把一个字符劈开
-            var clen = 0;
-            while (true)
-            {
-                try
-                {
-                    clen = encoding.GetCharCount(buf, 0, len);
-                    break;
-                }
-                catch (DecoderFallbackException)
-                {
-                    // 发生了回退，减少len再试
-                    len--;
-                }
-            }
-            // 可能过长，修正
-            if (strict) while (encoding.GetByteCount(str.ToCharArray(), 0, clen) > len) clen--;
-
-            return str.Substring(0, clen) + pad;
         }
 
         /// <summary>从当前字符串开头移除另一字符串以及之前的部分</summary>
@@ -515,16 +533,16 @@ namespace System
         /// <returns></returns>
         public static String CutStart(this String str, params String[] starts)
         {
-            if (String.IsNullOrEmpty(str)) return str;
-            if (starts == null || starts.Length < 1 || String.IsNullOrEmpty(starts[0])) return str;
+            if (str.IsNullOrEmpty()) return str;
+            if (starts == null || starts.Length < 1 || starts[0].IsNullOrEmpty()) return str;
 
-            for (int i = 0; i < starts.Length; i++)
+            for (var i = 0; i < starts.Length; i++)
             {
                 var p = str.IndexOf(starts[i]);
                 if (p >= 0)
                 {
                     str = str.Substring(p + starts[i].Length);
-                    if (String.IsNullOrEmpty(str)) break;
+                    if (str.IsNullOrEmpty()) break;
                 }
             }
             return str;
@@ -539,7 +557,7 @@ namespace System
             if (String.IsNullOrEmpty(str)) return str;
             if (ends == null || ends.Length < 1 || String.IsNullOrEmpty(ends[0])) return str;
 
-            for (int i = 0; i < ends.Length; i++)
+            for (var i = 0; i < ends.Length; i++)
             {
                 var p = str.LastIndexOf(ends[i]);
                 if (p >= 0)
@@ -564,11 +582,11 @@ namespace System
         {
             if (IsNullOrWhiteSpace(key)) return new String[0];
 
-            String[] keys = key.Split(new char[] { ' ', '　' }, StringSplitOptions.RemoveEmptyEntries);
+            var keys = key.Split(new Char[] { ' ', '　' }, StringSplitOptions.RemoveEmptyEntries);
 
-            foreach (String item in keys)
+            foreach (var item in keys)
             {
-                int maxDist = (item.Length - 1) / 2;
+                var maxDist = (item.Length - 1) / 2;
 
                 var q = from str in words
                         where item.Length <= str.Length
@@ -598,12 +616,12 @@ namespace System
         /// <param name="str1"></param>
         /// <param name="str2"></param>
         /// <returns></returns>
-        public static int LevenshteinDistance(String str1, String str2)
+        public static Int32 LevenshteinDistance(String str1, String str2)
         {
-            int n = str1.Length;
-            int m = str2.Length;
-            int[,] C = new int[n + 1, m + 1];
-            int i, j, x, y, z;
+            var n = str1.Length;
+            var m = str2.Length;
+            var C = new Int32[n + 1, m + 1];
+            Int32 i, j, x, y, z;
             for (i = 0; i <= n; i++)
                 C[i, 0] = i;
             for (i = 1; i <= m; i++)
@@ -635,8 +653,8 @@ namespace System
         {
             if (IsNullOrWhiteSpace(key) || words == null || words.Length == 0) return new String[0];
 
-            String[] keys = key
-                                .Split(new char[] { ' ', '\u3000' }, StringSplitOptions.RemoveEmptyEntries)
+            var keys = key
+                                .Split(new Char[] { ' ', '\u3000' }, StringSplitOptions.RemoveEmptyEntries)
                                 .OrderBy(s => s.Length)
                                 .ToArray();
 
@@ -661,18 +679,18 @@ namespace System
         /// <param name="word"></param>
         /// <param name="keys">多个关键字。长度必须大于0，必须按照字符串长度升序排列。</param>
         /// <returns></returns>
-        public static int LCSDistance(String word, String[] keys)
+        public static Int32 LCSDistance(String word, String[] keys)
         {
-            int sLength = word.Length;
-            int result = sLength;
-            bool[] flags = new bool[sLength];
-            int[,] C = new int[sLength + 1, keys[keys.Length - 1].Length + 1];
+            var sLength = word.Length;
+            var result = sLength;
+            var flags = new Boolean[sLength];
+            var C = new Int32[sLength + 1, keys[keys.Length - 1].Length + 1];
             //int[,] C = new int[sLength + 1, words.Select(s => s.Length).Max() + 1];
-            foreach (String key in keys)
+            foreach (var key in keys)
             {
-                int wLength = key.Length;
-                int first = 0, last = 0;
-                int i = 0, j = 0, LCS_L;
+                var wLength = key.Length;
+                Int32 first = 0, last = 0;
+                Int32 i = 0, j = 0, LCS_L;
                 //foreach 速度会有所提升，还可以加剪枝
                 for (i = 0; i < sLength; i++)
                     for (j = 0; j < wLength; j++)
@@ -717,55 +735,264 @@ namespace System
 
             return result;
         }
+
+        /// <summary>根据列表项成员计算距离</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="list"></param>
+        /// <param name="keys"></param>
+        /// <param name="keySelector"></param>
+        /// <returns></returns>
+        public static IEnumerable<KeyValuePair<T, Double>> LCS<T>(this IEnumerable<T> list, String keys, Func<T, String> keySelector)
+        {
+            var rs = new List<KeyValuePair<T, Double>>();
+
+            if (list == null || !list.Any()) return rs;
+            if (keys.IsNullOrWhiteSpace()) return rs;
+            if (keySelector == null) throw new ArgumentNullException(nameof(keySelector));
+
+            var ks = keys.Split(" ").OrderBy(_ => _.Length).ToArray();
+
+            // 计算每个项到关键字的距离
+            foreach (var item in list)
+            {
+                var name = keySelector(item);
+                if (name.IsNullOrEmpty()) continue;
+
+                var dist = LCSDistance(name, ks);
+                if (dist >= 0)
+                {
+                    var val = (Double)dist / name.Length;
+                    rs.Add(new KeyValuePair<T, Double>(item, val));
+                }
+            }
+
+            //return rs.OrderBy(e => e.Value);
+            return rs;
+        }
+
+        /// <summary>在列表项中进行模糊搜索</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="list"></param>
+        /// <param name="keys"></param>
+        /// <param name="keySelector"></param>
+        /// <param name="count"></param>
+        /// <returns></returns>
+        public static IEnumerable<T> LCSSearch<T>(this IEnumerable<T> list, String keys, Func<T, String> keySelector, Int32 count = -1)
+        {
+            var rs = LCS(list, keys, keySelector);
+
+            if (count >= 0)
+                rs = rs.OrderBy(e => e.Value).Take(count);
+            else
+                rs = rs.OrderBy(e => e.Value);
+
+            return rs.Select(e => e.Key);
+        }
+        #endregion
+
+        #region 字符串模糊匹配
+        /// <summary>模糊匹配</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="list"></param>
+        /// <param name="keys"></param>
+        /// <param name="keySelector"></param>
+        /// <returns></returns>
+        public static IList<KeyValuePair<T, Double>> Match<T>(this IEnumerable<T> list, String keys, Func<T, String> keySelector)
+        {
+            var rs = new List<KeyValuePair<T, Double>>();
+
+            if (list == null || !list.Any()) return rs;
+            if (keys.IsNullOrWhiteSpace()) return rs;
+            if (keySelector == null) throw new ArgumentNullException(nameof(keySelector));
+
+            var ks = keys.Split(" ").OrderBy(_ => _.Length).ToArray();
+
+            // 计算每个项到关键字的权重
+            foreach (var item in list)
+            {
+                var name = keySelector(item);
+                if (name.IsNullOrEmpty()) continue;
+
+                var dist = ks.Sum(e =>
+                {
+                    var kv = Match(name, e, e.Length);
+                    return kv.Key - kv.Value * 0.1;
+                });
+                if (dist > 0)
+                {
+                    var val = dist / keys.Length;
+                    //var val = dist;
+                    rs.Add(new KeyValuePair<T, Double>(item, val));
+                }
+            }
+
+            return rs;
+        }
+
+        /// <summary>模糊匹配</summary>
+        /// <param name="str"></param>
+        /// <param name="key"></param>
+        /// <param name="maxError"></param>
+        /// <returns></returns>
+        public static KeyValuePair<Int32, Int32> Match(String str, String key, Int32 maxError = 0)
+        {
+            /*
+             * 字符串 abcdef
+             * 少字符 ace      (3, 0)
+             * 多字符 abkcd    (4, 1)
+             * 改字符 abmd     (3, 1)
+             */
+
+            // str下一次要匹配的位置
+            var m = 0;
+            // key下一次要匹配的位置
+            var k = 0;
+
+            // 总匹配数
+            var match = 0;
+            // 跳过次数
+            var skip = 0;
+
+            while (skip <= maxError && k < key.Length)
+            {
+                // 向前逐个匹配
+                for (var i = m; i < str.Length; i++)
+                {
+                    if (str[i] == key[k])
+                    {
+                        k++;
+                        m = i + 1;
+                        match++;
+
+                        // 如果已完全匹配，则结束
+                        if (k == key.Length) break;
+                    }
+                }
+
+                // 如果已完全匹配，则结束
+                if (k == key.Length) break;
+
+                // 没有完全匹配，跳过关键字中的一个字符串，从上一次匹配后面继续找
+                k++;
+                skip++;
+            }
+
+            return new KeyValuePair<Int32, Int32>(match, skip);
+        }
+
+        /// <summary>模糊匹配</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="list">列表项</param>
+        /// <param name="keys">关键字</param>
+        /// <param name="keySelector">匹配字符串选择</param>
+        /// <param name="count">获取个数</param>
+        /// <param name="confidence">权重阀值</param>
+        /// <returns></returns>
+        public static IEnumerable<T> Match<T>(this IEnumerable<T> list, String keys, Func<T, String> keySelector, Int32 count, Double confidence = 0.5)
+        {
+            var rs = Match(list, keys, keySelector).Where(e => e.Value >= confidence);
+
+            if (count >= 0)
+                rs = rs.OrderByDescending(e => e.Value).Take(count);
+            else
+                rs = rs.OrderByDescending(e => e.Value);
+
+            return rs.Select(e => e.Key);
+        }
         #endregion
 
         #region 文字转语音
-#if !Android
-        private static NewLife.Extension.SpeakProvider _provider;
+        private static NewLife.Extension.SpeakProvider? _provider;
+        //private static System.Speech.Synthesis.SpeechSynthesizer _provider;
+        static void Init()
+        {
+            if (_provider == null)
+            {
+                //_provider = new Speech.Synthesis.SpeechSynthesizer();
+                //_provider.SetOutputToDefaultAudioDevice();
+                _provider = new NewLife.Extension.SpeakProvider();
+            }
+        }
+
         /// <summary>调用语音引擎说出指定话</summary>
         /// <param name="value"></param>
         public static void Speak(this String value)
         {
-            if (_provider == null) _provider = new NewLife.Extension.SpeakProvider();
+            Init();
 
-            _provider.Speak(value);
+            _provider?.Speak(value);
         }
 
-        /// <summary>调用语音引擎说出指定话</summary>
+        /// <summary>异步调用语音引擎说出指定话。可能导致后来的调用打断前面的语音</summary>
         /// <param name="value"></param>
         public static void SpeakAsync(this String value)
         {
-            if (_provider == null) _provider = new NewLife.Extension.SpeakProvider();
+            Init();
 
-            _provider.SpeakAsync(value);
+            _provider?.SpeakAsync(value);
         }
-#endif
+
+        /// <summary>启用语音提示</summary>
+        public static Boolean EnableSpeechTip { get; set; } = true;
+
+        /// <summary>语音提示操作</summary>
+        /// <param name="value"></param>
+        public static void SpeechTip(this String value)
+        {
+            if (!EnableSpeechTip) return;
+
+            try
+            {
+                SpeakAsync(value);
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// 停止所有语音播报
+        /// </summary>
+        /// <param name="value"></param>
+        public static String SpeakAsyncCancelAll(this String value)
+        {
+            Init();
+
+            _provider?.SpeakAsyncCancelAll();
+
+            return value;
+        }
         #endregion
 
         #region 执行命令行
+
         /// <summary>以隐藏窗口执行命令行</summary>
         /// <param name="cmd">文件名</param>
         /// <param name="arguments">命令参数</param>
         /// <param name="msWait">等待毫秒数</param>
         /// <param name="output">进程输出内容。默认为空时输出到日志</param>
         /// <param name="onExit">进程退出时执行</param>
+        /// <param name="working">工作目录</param>
         /// <returns>进程退出代码</returns>
-        public static Int32 Run(this String cmd, String arguments = null, Int32 msWait = 0, Action<String> output = null, Action<Process> onExit = null)
+        public static Int32 Run(this String cmd, String? arguments = null, Int32 msWait = 0, Action<String?>? output = null, Action<Process>? onExit = null, String? working = null)
         {
             if (XTrace.Debug) XTrace.WriteLine("Run {0} {1} {2}", cmd, arguments, msWait);
 
+            // 修正文件路径
+            var fileName = cmd;
+            if (!Path.IsPathRooted(fileName) && !working.IsNullOrEmpty()) fileName = working.CombinePath(fileName);
+
             var p = new Process();
             var si = p.StartInfo;
-            si.FileName = cmd;
-            si.Arguments = arguments;
+            si.FileName = fileName;
+            if (arguments != null) si.Arguments = arguments;
             si.WindowStyle = ProcessWindowStyle.Hidden;
-
+            si.CreateNoWindow = true;
+            if (!working.IsNullOrWhiteSpace()) si.WorkingDirectory = working;
             // 对于控制台项目，这里需要捕获输出
             if (msWait > 0)
             {
+                si.UseShellExecute = false;
                 si.RedirectStandardOutput = true;
                 si.RedirectStandardError = true;
-                si.UseShellExecute = false;
                 if (output != null)
                 {
                     p.OutputDataReceived += (s, e) => output(e.Data);
@@ -773,11 +1000,11 @@ namespace System
                 }
                 else if (NewLife.Runtime.IsConsole)
                 {
-                    p.OutputDataReceived += (s, e) => XTrace.WriteLine(e.Data);
-                    p.ErrorDataReceived += (s, e) => XTrace.Log.Error(e.Data);
+                    p.OutputDataReceived += (s, e) => { if (e.Data != null) XTrace.WriteLine(e.Data); };
+                    p.ErrorDataReceived += (s, e) => { if (e.Data != null) XTrace.Log.Error(e.Data); };
                 }
             }
-            if (onExit != null) p.Exited += (s, e) => onExit(s as Process);
+            if (onExit != null) p.Exited += (s, e) => { if (s is Process proc) onExit(proc); };
 
             p.Start();
             if (msWait > 0 && (output != null || NewLife.Runtime.IsConsole))
@@ -786,13 +1013,43 @@ namespace System
                 p.BeginErrorReadLine();
             }
 
-            if (msWait <= 0) return -1;
+            if (msWait == 0) return -1;
 
             // 如果未退出，则不能拿到退出代码
-            if (!p.WaitForExit(msWait)) return -1;
+            if (msWait < 0)
+                p.WaitForExit();
+            else if (!p.WaitForExit(msWait))
+                return -1;
 
             return p.ExitCode;
+        }
+
+        /// <summary>
+        /// 在Shell上执行命令。目标进程不是子进程，不会随着当前进程退出而退出
+        /// </summary>
+        /// <param name="fileName">文件名</param>
+        /// <param name="arguments">参数</param>
+        /// <param name="workingDirectory">工作目录。目标进程的当前目录</param>
+        /// <returns></returns>
+        public static Process ShellExecute(this String fileName, String? arguments = null, String? workingDirectory = null)
+        {
+            if (XTrace.Debug) XTrace.WriteLine("ShellExecute {0} {1} {2}", fileName, arguments, workingDirectory);
+
+            // 修正文件路径
+            if (!Path.IsPathRooted(fileName) && !workingDirectory.IsNullOrEmpty()) fileName = workingDirectory.CombinePath(fileName);
+
+            var p = new Process();
+            var si = p.StartInfo;
+            si.UseShellExecute = true;
+            si.FileName = fileName;
+            si.Arguments = arguments;
+            si.WorkingDirectory = workingDirectory;
+
+            p.Start();
+
+            return p;
         }
         #endregion
     }
 }
+#nullable restore

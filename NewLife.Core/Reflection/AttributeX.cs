@@ -1,19 +1,49 @@
-﻿using System.ComponentModel;
+﻿using System;
+using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Linq;
 using System.Reflection;
+using NewLife;
 using NewLife.Collections;
 using NewLife.Reflection;
 
-namespace System
+namespace NewLife
 {
     /// <summary>特性辅助类</summary>
     public static class AttributeX
     {
         #region 静态方法
-#if !NET45 && !Android
+#if NET40
+        /// <summary>获取自定义属性</summary>
+        /// <typeparam name="TAttribute"></typeparam>
+        /// <param name="member"></param>
+        /// <param name="inherit"></param>
+        /// <returns></returns>
+        public static TAttribute GetCustomAttribute<TAttribute>(this MemberInfo member, Boolean inherit = true) where TAttribute : Attribute
+        {
+            var atts = member.GetCustomAttributes<TAttribute>(false)?.ToArray();
+            if (atts != null && atts.Length > 0) return atts[0];
 
-        private static DictionaryCache<MemberInfo, DictionaryCache<Type, Array>> _miCache = new DictionaryCache<MemberInfo, DictionaryCache<Type, Array>>();
-        private static DictionaryCache<MemberInfo, DictionaryCache<Type, Array>> _miCache2 = new DictionaryCache<MemberInfo, DictionaryCache<Type, Array>>();
+            if (inherit)
+            {
+                atts = member.GetCustomAttributes<TAttribute>(inherit)?.ToArray();
+                if (atts != null && atts.Length > 0) return atts[0];
+            }
+
+            return default;
+        }
+
+        /// <summary>获取自定义属性</summary>
+        /// <typeparam name="TAttribute"></typeparam>
+        /// <param name="assembly"></param>
+        /// <returns></returns>
+        public static TAttribute GetCustomAttribute<TAttribute>(this Assembly assembly)
+        {
+            var avs = assembly.GetCustomAttributes<TAttribute>();
+            if (avs == null || avs.Length < 1) return default;
+
+            return avs[0];
+        }
 
         /// <summary>获取自定义特性，带有缓存功能，避免因.Net内部GetCustomAttributes没有缓存而带来的损耗</summary>
         /// <typeparam name="TAttribute"></typeparam>
@@ -24,56 +54,14 @@ namespace System
         {
             if (member == null) return new TAttribute[0];
 
-            var micache = _miCache;
-            if (!inherit) micache = _miCache2;
-
-            // 二级字典缓存
-            var cache = micache.GetItem(member, m => new DictionaryCache<Type, Array>());
-            var atts = cache.GetItem<MemberInfo, Boolean>(typeof(TAttribute), member, inherit, (t, m, inh) =>
-            {
-                return m.GetCustomAttributes(t, inh).Cast<TAttribute>().ToArray();
-            });
+            var atts =  member.GetCustomAttributes(typeof(TAttribute), inherit).Cast<TAttribute>().ToArray();
             if (atts == null || atts.Length <= 0) return new TAttribute[0];
 
-            //return atts.Cast<TAttribute>().ToArray();
-            return atts as TAttribute[];
-
-            //var key = "";
-            //var type = (member as Type) ?? member.DeclaringType ?? member.ReflectedType;
-            //if (type != null)
-            //    key = String.Format("{0}_{1}", type.FullName, member.Name);
-            //else
-            //    key = String.Format("{0}_{1}", member.Module.Assembly.FullName, member.MetadataToken);
-
-            //key = String.Format("{0}_{1}_{2}", key, typeof(TAttribute).FullName, inherit);
-
-            //return (TAttribute[])_miCache.GetItem<MemberInfo, Boolean>(key, member, inherit, (k, m, h) =>
-            //{
-            //    var atts = m.GetCustomAttributes(typeof(TAttribute), h) as TAttribute[];
-            //    return atts == null ? new TAttribute[0] : atts;
-            //});
+            return atts;
         }
+#endif
 
-        /// <summary>获取自定义属性</summary>
-        /// <typeparam name="TAttribute"></typeparam>
-        /// <param name="member"></param>
-        /// <param name="inherit"></param>
-        /// <returns></returns>
-        public static TAttribute GetCustomAttribute<TAttribute>(this MemberInfo member, Boolean inherit = true)
-        {
-            var atts = member.GetCustomAttributes<TAttribute>(false);
-            if (atts != null && atts.Length > 0) return atts[0];
-
-            if (inherit)
-            {
-                atts = member.GetCustomAttributes<TAttribute>(inherit);
-                if (atts != null && atts.Length > 0) return atts[0];
-            }
-
-            return default(TAttribute);
-        }
-
-        private static DictionaryCache<String, Object> _asmCache = new DictionaryCache<String, Object>();
+        private static readonly ConcurrentDictionary<String, Object> _asmCache = new();
 
         /// <summary>获取自定义属性，带有缓存功能，避免因.Net内部GetCustomAttributes没有缓存而带来的损耗</summary>
         /// <typeparam name="TAttribute"></typeparam>
@@ -83,28 +71,16 @@ namespace System
         {
             if (assembly == null) return new TAttribute[0];
 
-            var key = String.Format("{0}_{1}", assembly.FullName, typeof(TAttribute).FullName);
+            var key = $"{assembly.FullName}_{typeof(TAttribute).FullName}";
 
-            return (TAttribute[])_asmCache.GetItem<Assembly>(key, assembly, (k, m) =>
+            return (TAttribute[])_asmCache.GetOrAdd(key, k =>
             {
-                var atts = m.GetCustomAttributes(typeof(TAttribute), true) as TAttribute[];
-                return atts == null ? new TAttribute[0] : atts;
+                var atts = assembly.GetCustomAttributes(typeof(TAttribute), true) as TAttribute[];
+                return atts ?? (new TAttribute[0]);
             });
         }
 
-        /// <summary>获取自定义属性</summary>
-        /// <typeparam name="TAttribute"></typeparam>
-        /// <param name="assembly"></param>
-        /// <returns></returns>
-        public static TAttribute GetCustomAttribute<TAttribute>(this Assembly assembly)
-        {
-            var avs = assembly.GetCustomAttributes<TAttribute>();
-            if (avs == null || avs.Length < 1) return default(TAttribute);
-
-            return avs[0];
-        }
-#endif
-        /// <summary>获取成员绑定的显示名，优先DisplayName，然后Description</summary>
+        /// <summary>获取成员绑定的显示名</summary>
         /// <param name="member"></param>
         /// <param name="inherit"></param>
         /// <returns></returns>
@@ -116,7 +92,7 @@ namespace System
             return null;
         }
 
-        /// <summary>获取成员绑定的显示名，优先DisplayName，然后Description</summary>
+        /// <summary>获取成员绑定的备注</summary>
         /// <param name="member"></param>
         /// <param name="inherit"></param>
         /// <returns></returns>
@@ -134,20 +110,25 @@ namespace System
         /// <returns></returns>
         public static TResult GetCustomAttributeValue<TAttribute, TResult>(this Assembly target) where TAttribute : Attribute
         {
-            if (target == null) return default(TResult);
+            if (target == null) return default;
 
-            var list = CustomAttributeData.GetCustomAttributes(target);
-            if (list == null || list.Count < 1) return default(TResult);
-
-            foreach (var item in list)
+            // CustomAttributeData可能会导致只反射加载，需要屏蔽内部异常
+            try
             {
-                if (typeof(TAttribute) != item.Constructor.DeclaringType) continue;
+                var list = CustomAttributeData.GetCustomAttributes(target);
+                if (list == null || list.Count < 1) return default;
 
-                var args = item.ConstructorArguments;
-                if (args != null && args.Count > 0) return (TResult)args[0].Value;
+                foreach (var item in list)
+                {
+                    if (typeof(TAttribute) != item.Constructor.DeclaringType) continue;
+
+                    var args = item.ConstructorArguments;
+                    if (args != null && args.Count > 0) return (TResult)args[0].Value;
+                }
             }
+            catch { }
 
-            return default(TResult);
+            return default;
         }
 
         /// <summary>获取自定义属性的值。可用于ReflectionOnly加载的程序集</summary>
@@ -158,7 +139,7 @@ namespace System
         /// <returns></returns>
         public static TResult GetCustomAttributeValue<TAttribute, TResult>(this MemberInfo target, Boolean inherit = true) where TAttribute : Attribute
         {
-            if (target == null) return default(TResult);
+            if (target == null) return default;
 
             try
             {
@@ -167,7 +148,7 @@ namespace System
                 {
                     foreach (var item in list)
                     {
-                        if (!TypeX.Equal(typeof(TAttribute), item.Constructor.DeclaringType)) continue;
+                        if (typeof(TAttribute).FullName != item.Constructor.DeclaringType.FullName) continue;
 
                         var args = item.ConstructorArguments;
                         if (args != null && args.Count > 0) return (TResult)args[0].Value;
@@ -195,7 +176,7 @@ namespace System
                 }
             }
 
-            return default(TResult);
+            return default;
         }
 
         #endregion

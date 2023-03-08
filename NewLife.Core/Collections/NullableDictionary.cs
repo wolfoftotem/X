@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Collections.Generic;
 
 namespace NewLife.Collections
 {
@@ -12,21 +10,25 @@ namespace NewLife.Collections
         /// <summary>实例化一个可空字典</summary>
         public NullableDictionary() { }
 
-        /// <summary>置顶比较器实例化一个可空字典</summary>
+        /// <summary>指定比较器实例化一个可空字典</summary>
         /// <param name="comparer"></param>
         public NullableDictionary(IEqualityComparer<TKey> comparer) : base(comparer) { }
 
-        /// <summary>获取或设置与指定的属性是否有脏数据。</summary>
+        /// <summary>实例化一个可空字典</summary>
+        /// <param name="dic"></param>
+        /// <param name="comparer"></param>
+        public NullableDictionary(IDictionary<TKey, TValue> dic, IEqualityComparer<TKey> comparer) : base(dic, comparer) { }
+
+        /// <summary>获取 或 设置 数据</summary>
         /// <param name="item"></param>
         /// <returns></returns>
         public new TValue this[TKey item]
         {
             get
             {
-                TValue v;
-                if (TryGetValue(item, out v)) return v;
+                if (TryGetValue(item, out var v)) return v;
 
-                return default(TValue);
+                return default;
             }
             set
             {

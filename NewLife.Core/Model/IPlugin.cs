@@ -1,11 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using NewLife.Log;
 using NewLife.Reflection;
-#if Android
-using System.Reflection;
-#endif
 
 namespace NewLife.Model
 {
@@ -29,62 +27,57 @@ namespace NewLife.Model
     [AttributeUsage(AttributeTargets.Class)]
     public class PluginAttribute : Attribute
     {
-        private String _Identity;
         /// <summary>插件宿主标识</summary>
-        public String Identity { get { return _Identity; } set { _Identity = value; } }
+        public String Identity { get; set; }
 
         /// <summary>实例化</summary>
         /// <param name="identity"></param>
-        public PluginAttribute(String identity) { Identity = identity; }
+        public PluginAttribute(String identity) => Identity = identity;
     }
 
     /// <summary>插件管理器</summary>
     public class PluginManager : DisposeBase, IServiceProvider
     {
         #region 属性
-        private String _Identity;
         /// <summary>宿主标识，用于供插件区分不同宿主</summary>
-        public String Identity { get { return _Identity; } set { _Identity = value; } }
+        public String Identity { get; set; }
 
-        private IServiceProvider _Provider;
         /// <summary>宿主服务提供者</summary>
-        public IServiceProvider Provider { get { return _Provider; } set { _Provider = value; } }
+        public IServiceProvider Provider { get; set; }
 
-        private List<IPlugin> _Plugins;
         /// <summary>插件集合</summary>
-        public List<IPlugin> Plugins { get { return _Plugins ?? (_Plugins = new List<IPlugin>()); } }
+        public IPlugin[] Plugins { get; set; }
 
-        private ILog _Log = XTrace.Log;
         /// <summary>日志提供者</summary>
-        public ILog Log { get { return _Log; } set { _Log = value; } }
+        public ILog Log { get; set; } = XTrace.Log;
         #endregion
 
         #region 构造
         /// <summary>实例化一个插件管理器</summary>
         public PluginManager() { }
 
-        /// <summary>使用宿主对象实例化一个插件管理器</summary>
-        /// <param name="host"></param>
-        public PluginManager(Object host)
-        {
-            if (host != null)
-            {
-                Identity = host.ToString();
-                Provider = host as IServiceProvider;
-            }
-        }
+        ///// <summary>使用宿主对象实例化一个插件管理器</summary>
+        ///// <param name="host"></param>
+        //public PluginManager(Object host)
+        //{
+        //    if (host != null)
+        //    {
+        //        Identity = host.ToString();
+        //        Provider = host as IServiceProvider;
+        //    }
+        //}
 
         /// <summary>子类重载实现资源释放逻辑时必须首先调用基类方法</summary>
         /// <param name="disposing">从Dispose调用（释放所有资源）还是析构函数调用（释放非托管资源）。
         /// 因为该方法只会被调用一次，所以该参数的意义不太大。</param>
-        protected override void OnDispose(bool disposing)
+        protected override void Dispose(Boolean disposing)
         {
-            base.OnDispose(disposing);
+            base.Dispose(disposing);
 
             if (disposing)
             {
-                _Plugins.TryDispose();
-                _Plugins = null;
+                Plugins.TryDispose();
+                Plugins = null;
             }
         }
         #endregion
@@ -99,65 +92,64 @@ namespace NewLife.Model
             {
                 if (item != null)
                 {
-                    list.Add(item.CreateInstance() as IPlugin);
+                    try
+                    {
+                        if (item.CreateInstance() is IPlugin plugin) list.Add(plugin);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log?.Debug(null, ex);
+                    }
                 }
             }
-            _Plugins = list;
+            Plugins = list.ToArray();
         }
 
-        IList<Type> pluginTypes;
         IEnumerable<Type> LoadPlugins()
         {
-            if (pluginTypes != null) return pluginTypes;
-
-            var list = new List<Type>();
             // 此时是加载所有插件，无法识别哪些是需要的
-            foreach (var item in typeof(IPlugin).GetAllSubclasses(true))
+            foreach (var item in AssemblyX.FindAllPlugins(typeof(IPlugin), true))
             {
                 if (item != null)
                 {
                     // 如果有插件特性，并且所有特性都不支持当前宿主，则跳过
                     var atts = item.GetCustomAttributes<PluginAttribute>(true);
-
                     if (atts != null && atts.Any(a => a.Identity != Identity)) continue;
 
-                    list.Add(item);
+                    yield return item;
                 }
             }
-            return pluginTypes = list;
         }
 
         /// <summary>开始初始化。初始化之后，不属于当前宿主的插件将会被过滤掉</summary>
         public void Init()
         {
             var ps = Plugins;
-            if (ps == null || ps.Count < 1) return;
+            if (ps == null || ps.Length <= 0) return;
 
-            for (int i = ps.Count - 1; i >= 0; i--)
+            var list = new List<IPlugin>();
+            foreach (var item in ps)
             {
                 try
                 {
-                    if (!ps[i].Init(Identity, Provider)) ps.RemoveAt(i);
+                    if (item.Init(Identity, this)) list.Add(item);
                 }
                 catch (Exception ex)
                 {
-                    //XTrace.WriteExceptionWhenDebug(ex);
-                    Log.Debug(null, ex);
-
-                    ps.RemoveAt(i);
+                    Log?.Debug(null, ex);
                 }
             }
+
+            Plugins = list.ToArray();
         }
         #endregion
 
         #region IServiceProvider 成员
-        object IServiceProvider.GetService(Type serviceType)
+        Object IServiceProvider.GetService(Type serviceType)
         {
             if (serviceType == typeof(PluginManager)) return this;
 
-            if (Provider != null) Provider.GetService(serviceType);
-
-            return null;
+            return Provider?.GetService(serviceType);
         }
         #endregion
     }

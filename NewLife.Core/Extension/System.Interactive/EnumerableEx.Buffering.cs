@@ -543,11 +543,7 @@ namespace System.Linq
     /// Represents a buffer exposing a shared view over an underlying enumerable sequence.
     /// </summary>
     /// <typeparam name="T">Element type.</typeparam>
-    public interface IBuffer<
-#if !NO_VARIANCE && !SILVERLIGHT4 // SL4 has defined IEnumerable with invariant T
-out
-#endif
-T> : IEnumerable<T>, IDisposable
+    public interface IBuffer<T> : IEnumerable<T>, IDisposable
     {
     }
 

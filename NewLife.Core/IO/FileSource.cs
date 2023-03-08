@@ -12,38 +12,32 @@ namespace NewLife.IO
     {
         /// <summary>释放文件</summary>
         /// <param name="asm"></param>
-        /// <param name="filename"></param>
-        /// <param name="dest"></param>
+        /// <param name="fileName"></param>
+        /// <param name="destFile"></param>
         /// <param name="overWrite"></param>
-        public static void ReleaseFile(this Assembly asm, String filename, String dest, Boolean overWrite = false)
+        public static void ReleaseFile(this Assembly asm, String fileName, String destFile = null, Boolean overWrite = false)
         {
-            if (String.IsNullOrEmpty(filename)) return;
+            if (fileName.IsNullOrEmpty()) return;
 
             if (asm == null) asm = Assembly.GetCallingAssembly();
-            var stream = GetFileResource(asm, filename);
-            if (stream == null) throw new ArgumentException("filename", String.Format("在程序集{0}中无法找到名为{1}的资源！", asm.GetName().Name, filename));
+            var stream = GetFileResource(asm, fileName);
+            if (stream == null) throw new ArgumentException("filename", $"在程序集{asm.GetName().Name}中无法找到名为{fileName}的资源！");
 
-            if (String.IsNullOrEmpty(dest)) dest = filename;
+            if (destFile.IsNullOrEmpty()) destFile = fileName;
+            destFile = destFile.GetFullPath();
 
-            if (!Path.IsPathRooted(dest))
-            {
-                var str = Runtime.IsWeb ? HttpRuntime.BinDirectory : AppDomain.CurrentDomain.BaseDirectory;
-                dest = Path.Combine(str, dest);
-            }
-
-            if (File.Exists(dest) && !overWrite) return;
+            if (File.Exists(destFile) && !overWrite) return;
 
             //var path = Path.GetDirectoryName(dest);
             //if (!path.IsNullOrWhiteSpace() && !Directory.Exists(path)) Directory.CreateDirectory(path);
-            dest.EnsureDirectory(true);
+            destFile.EnsureDirectory(true);
             try
             {
-                if (File.Exists(dest)) File.Delete(dest);
+                if (File.Exists(destFile)) File.Delete(destFile);
 
-                using (var fs = File.Create(dest))
-                {
-                    IOHelper.CopyTo(stream, fs);
-                }
+                using var fs = File.Create(destFile);
+                //IOHelper.CopyTo(stream, fs);
+                stream.CopyTo(fs);
             }
             catch { }
             finally { stream.Dispose(); }
@@ -71,7 +65,7 @@ namespace NewLife.IO
             if (asm == null) asm = Assembly.GetCallingAssembly();
 
             // 找到符合条件的资源
-            String[] names = asm.GetManifestResourceNames();
+            var names = asm.GetManifestResourceNames();
             if (names == null || names.Length < 1) return;
             IEnumerable<String> ns = null;
             if (prefix.IsNullOrWhiteSpace())
@@ -79,13 +73,8 @@ namespace NewLife.IO
             else
                 ns = names.Where(e => e.StartsWithIgnoreCase(prefix));
 
-            if (String.IsNullOrEmpty(dest)) dest = AppDomain.CurrentDomain.BaseDirectory;
-
-            if (!Path.IsPathRooted(dest))
-            {
-                String str = Runtime.IsWeb ? HttpRuntime.BinDirectory : AppDomain.CurrentDomain.BaseDirectory;
-                dest = Path.Combine(str, dest);
-            }
+            if (String.IsNullOrEmpty(dest)) dest = ".".GetFullPath();
+            dest = dest.GetFullPath();
 
             // 开始处理
             foreach (var item in ns)
@@ -118,10 +107,9 @@ namespace NewLife.IO
                 {
                     if (File.Exists(filename)) File.Delete(filename);
 
-                    using (var fs = File.Create(filename))
-                    {
-                        IOHelper.CopyTo(stream, fs);
-                    }
+                    using var fs = File.Create(filename);
+                    //IOHelper.CopyTo(stream, fs);
+                    stream.CopyTo(fs);
                 }
                 catch { }
                 finally { stream.Dispose(); }

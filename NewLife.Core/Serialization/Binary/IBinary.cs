@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 
 namespace NewLife.Serialization
 {
@@ -11,11 +10,14 @@ namespace NewLife.Serialization
         /// <summary>编码整数</summary>
         Boolean EncodeInt { get; set; }
 
-        /// <summary>小端字节序</summary>
+        /// <summary>小端字节序。默认false大端</summary>
         Boolean IsLittleEndian { get; set; }
 
-        /// <summary>使用指定大小的FieldSizeAttribute特性，默认false</summary>
-        Boolean UseFieldSize { get; set; }
+        ///// <summary>使用指定大小的FieldSizeAttribute特性，默认false</summary>
+        //Boolean UseFieldSize { get; set; }
+
+        /// <summary>要忽略的成员</summary>
+        ICollection<String> IgnoreMembers { get; set; }
 
         /// <summary>处理器列表</summary>
         IList<IBinaryHandler> Handlers { get; }
@@ -30,7 +32,7 @@ namespace NewLife.Serialization
         /// <param name="buffer">包含要写入的数据的字节数组。</param>
         /// <param name="offset">buffer 中开始写入的起始点。</param>
         /// <param name="count">要写入的字节数。</param>
-        void Write(Byte[] buffer, Int32 offset = 0, Int32 count = -1);
+        void Write(Byte[] buffer, Int32 offset, Int32 count);
 
         /// <summary>写入大小</summary>
         /// <param name="size">要写入的大小值</param>

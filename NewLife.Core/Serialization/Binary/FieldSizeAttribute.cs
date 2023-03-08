@@ -8,32 +8,46 @@ namespace NewLife.Serialization
 {
     /// <summary>字段大小特性。</summary>
     /// <remarks>
-    /// 可以通过Size指定字符串或数组的固有大小，为0表示自动计算；也可以通过指定参考字段ReferenceName，然后从其中获取大小。
-    /// 支持_Header._Questions形式的多层次引用字段
+    /// 可以通过Size指定字符串或数组的固有大小，为0表示自动计算；
+    /// 也可以通过指定参考字段ReferenceName，然后从其中获取大小。
+    /// 支持_Header._Questions形式的多层次引用字段。
+    /// 
+    /// 支持针对单个成员使用多个FieldSize特性，各自指定不同Version版本，以支持不同版本协议的序列化。
+    /// 例如JT/T808协议，2011/2019版的相同字段使用不同长度。
     /// </remarks>
-    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
+    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = true)]
     public class FieldSizeAttribute : Attribute
     {
-        private Int32 _Size;
         /// <summary>大小。使用<see cref="ReferenceName"/>时，作为偏移量；0表示自动计算大小</summary>
-        public Int32 Size { get { return _Size; } set { _Size = value; } }
+        public Int32 Size { get; set; }
 
-        private String _ReferenceName;
-        /// <summary>参考大小字段名</summary>
-        public String ReferenceName { get { return _ReferenceName; } set { _ReferenceName = value; } }
+        /// <summary>参考大小字段名，其中存储了实际大小，使用时获取</summary>
+        public String ReferenceName { get; set; }
+
+        /// <summary>协议版本。用于支持多版本协议序列化。例如JT/T808的2011/2019</summary>
+        public String Version { get; set; }
 
         /// <summary>通过Size指定字符串或数组的固有大小，为0表示自动计算</summary>
         /// <param name="size"></param>
-        public FieldSizeAttribute(Int32 size) { Size = size; }
+        public FieldSizeAttribute(Int32 size) => Size = size;
 
         /// <summary>指定参考字段ReferenceName，然后从其中获取大小</summary>
         /// <param name="referenceName"></param>
-        public FieldSizeAttribute(String referenceName) { ReferenceName = referenceName; }
+        public FieldSizeAttribute(String referenceName) => ReferenceName = referenceName;
 
         /// <summary>指定参考字段ReferenceName，然后从其中获取大小</summary>
         /// <param name="referenceName"></param>
         /// <param name="size">在参考字段值基础上的增量，可以是正数负数</param>
         public FieldSizeAttribute(String referenceName, Int32 size) { ReferenceName = referenceName; Size = size; }
+
+        /// <summary>指定大小，指定协议版本，用于支持多版本协议序列化</summary>
+        /// <param name="size"></param>
+        /// <param name="version"></param>
+        public FieldSizeAttribute(Int32 size, String version)
+        {
+            Size = size;
+            Version = version;
+        }
 
         #region 方法
         /// <summary>找到所引用的参考字段</summary>
@@ -41,7 +55,7 @@ namespace NewLife.Serialization
         /// <param name="member">目标对象的成员</param>
         /// <param name="value">数值</param>
         /// <returns></returns>
-        MemberInfo FindReference(Object target, MemberInfo member, out Object value)
+        private MemberInfo FindReference(Object target, MemberInfo member, out Object value)
         {
             value = null;
 
@@ -50,10 +64,10 @@ namespace NewLife.Serialization
 
             // 考虑ReferenceName可能是圆点分隔的多重结构
             MemberInfo mi = null;
-            Type type = member.DeclaringType;
+            var type = member.DeclaringType;
             value = target;
-            var ss = ReferenceName.Split(".");
-            for (int i = 0; i < ss.Length; i++)
+            var ss = ReferenceName.Split('.');
+            for (var i = 0; i < ss.Length; i++)
             {
                 var pi = type.GetPropertyEx(ss[i]);
                 if (pi != null)
@@ -80,7 +94,7 @@ namespace NewLife.Serialization
 
             // 目标字段必须是整型
             var tc = Type.GetTypeCode(type);
-            if (tc >= TypeCode.SByte && tc <= TypeCode.UInt64) return mi;
+            if (tc is >= TypeCode.SByte and <= TypeCode.UInt64) return mi;
 
             return null;
         }
@@ -91,8 +105,7 @@ namespace NewLife.Serialization
         /// <param name="encoding"></param>
         internal void SetReferenceSize(Object target, MemberInfo member, Encoding encoding)
         {
-            Object v = null;
-            var mi = FindReference(target, member, out v);
+            var mi = FindReference(target, member, out var v);
             if (mi == null) return;
 
             // 获取当前成员（加了特性）的值
@@ -100,7 +113,7 @@ namespace NewLife.Serialization
             if (value == null) return;
 
             // 尝试计算大小
-            Int32 size = 0;
+            var size = 0;
             if (value is String)
             {
                 if (encoding == null) encoding = Encoding.UTF8;
@@ -126,14 +139,18 @@ namespace NewLife.Serialization
         /// <summary>获取目标对象的引用大小值</summary>
         /// <param name="target">目标对象</param>
         /// <param name="member"></param>
+        /// <param name="size"></param>
         /// <returns></returns>
-        internal Int32 GetReferenceSize(Object target, MemberInfo member)
+        internal Boolean TryGetReferenceSize(Object target, MemberInfo member, out Int32 size)
         {
-            Object v = null;
-            var mi = FindReference(target, member, out v);
-            if (mi == null) return -1;
+            size = -1;
 
-            return Convert.ToInt32(v.GetValue(mi)) + Size;
+            var mi = FindReference(target, member, out var v);
+            if (mi == null) return false;
+
+            size = Convert.ToInt32(v.GetValue(mi)) + Size;
+
+            return true;
         }
         #endregion
     }

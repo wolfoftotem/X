@@ -13,6 +13,8 @@
     <FileAlignment>512</FileAlignment>
     <BuildPackage>true</BuildPackage>
     <TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -47,23 +49,46 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Algorithms\AlignModes.cs" />
+    <Compile Include="Algorithms\AverageSampling.cs" />
+    <Compile Include="Algorithms\IInterpolation.cs" />
+    <Compile Include="Algorithms\ISampling.cs" />
+    <Compile Include="Algorithms\LinearInterpolation.cs" />
+    <Compile Include="Caching\Cache.cs" />
+    <Compile Include="Caching\CacheLock.cs" />
+    <Compile Include="Caching\ICache.cs" />
+    <Compile Include="Caching\IProducerConsumer.cs" />
+    <Compile Include="Caching\MemoryCache.cs" />
+    <Compile Include="Caching\Redis.cs" />
+    <Compile Include="Caching\RedisClient.cs" />
+    <Compile Include="Caching\RedisEncoder.cs" />
+    <Compile Include="Collections\BloomFilter.cs" />
     <Compile Include="Collections\CollectionHelper.cs" />
     <Compile Include="Collections\ConcurrentDictionary.cs" />
+    <Compile Include="Collections\ConcurrentHashSet.cs" />
     <Compile Include="Collections\ConcurrentQueue.cs" />
     <Compile Include="Collections\DictionaryCache.cs" />
     <Compile Include="Collections\HashSet.cs" />
+    <Compile Include="Collections\ICluster.cs" />
+    <Compile Include="Collections\IDictionarySource.cs" />
+    <Compile Include="Collections\IPool.cs" />
     <Compile Include="Collections\IStack.cs" />
     <Compile Include="Collections\ListBase.cs" />
     <Compile Include="Collections\LockStack.cs" />
     <Compile Include="Collections\NullableDictionary.cs" />
     <Compile Include="Collections\ObjectPool.cs" />
     <Compile Include="Collections\ObjectPoolTest.cs" />
+    <Compile Include="Collections\Pool.cs" />
+    <Compile Include="Collections\QueueService.cs" />
     <Compile Include="Collections\SafeStack.cs" />
     <Compile Include="Collections\SingleListNode.cs" />
     <Compile Include="Collections\ConcurrentStack.cs" />
     <Compile Include="Collections\WeakRefDictionary.cs" />
     <Compile Include="Common\CombGuid.cs" />
+    <Compile Include="Common\Index.cs" />
+    <Compile Include="Common\MachineInfo.cs" />
     <Compile Include="Common\PinYin.cs" />
+    <Compile Include="Common\Range.cs" />
     <Compile Include="Common\Runtime.cs" />
     <Compile Include="Common\SysConfig.cs" />
     <Compile Include="Common\Utility.cs" />
@@ -72,6 +97,36 @@
     <Compile Include="Compression\ZipEntry.cs" />
     <Compile Include="Compression\ZipFile.cs" />
     <Compile Include="Configuration\CombConfig.cs" />
+    <Compile Include="Configuration\CompositeConfigProvider.cs" />
+    <Compile Include="Configuration\ConfigAttribute.cs" />
+    <Compile Include="Configuration\ConfigCacheLevel.cs" />
+    <Compile Include="Configuration\ConfigHelper.cs" />
+    <Compile Include="Configuration\FileConfigProvider.cs" />
+    <Compile Include="Configuration\GetConfigCallback.cs" />
+    <Compile Include="Configuration\HttpConfigProvider.cs" />
+    <Compile Include="Configuration\IConfigMapping.cs" />
+    <Compile Include="Configuration\IConfigProvider.cs" />
+    <Compile Include="Configuration\IConfigSection.cs" />
+    <Compile Include="Configuration\IniConfigProvider.cs" />
+    <Compile Include="Configuration\JsonConfigProvider.cs" />
+    <Compile Include="Configuration\XmlConfigProvider.cs" />
+    <Compile Include="Data\BinaryTree.cs" />
+    <Compile Include="Data\DbRow.cs" />
+    <Compile Include="Data\DbTable.cs" />
+    <Compile Include="Data\GeoAddress.cs" />
+    <Compile Include="Data\GeoArea.cs" />
+    <Compile Include="Data\GeoHash.cs" />
+    <Compile Include="Data\GeoPoint.cs" />
+    <Compile Include="Data\IData.cs" />
+    <Compile Include="Data\IExtend.cs" />
+    <Compile Include="Data\IFilter.cs" />
+    <Compile Include="Data\IMemoryEncoder.cs" />
+    <Compile Include="Data\IndexRange.cs" />
+    <Compile Include="Data\IPacketEncoder.cs" />
+    <Compile Include="Data\Packet.cs" />
+    <Compile Include="Data\RingBuffer.cs" />
+    <Compile Include="Data\Snowflake.cs" />
+    <Compile Include="Data\TimePoint.cs" />
     <Compile Include="Extension\BitHelper.cs" />
     <Compile Include="Extension\CaCollectionExtensions.cs" />
     <Compile Include="Extension\ScriptIgnoreAttribute.cs" />
@@ -154,6 +209,7 @@
     <Compile Include="Model\ObjectContainer.cs" />
     <Compile Include="Model\IServer.cs" />
     <Compile Include="Reflection\ApiHook.cs" />
+    <None Include="Caching\Readme.MD" />
     <None Include="Reflection\AsmX86.cs" />
     <Compile Include="Reflection\CodeDomDuckTypeGenerator.cs" />
     <Compile Include="Reflection\DuckTyping.cs" />
@@ -252,9 +308,7 @@
     <Compile Include="Data\PageParameter.cs" />
     <Compile Include="Web\Pager.cs" />
     <Compile Include="Web\PluginHelper.cs" />
-    <Compile Include="Web\WebClientX.cs">
-      <SubType>Component</SubType>
-    </Compile>
+    <Compile Include="Web\WebClientX.cs" />
     <Compile Include="Web\WebDownload.cs" />
     <Compile Include="Web\WebHelper.cs" />
     <Compile Include="Net\SerialPortConfig.cs" />

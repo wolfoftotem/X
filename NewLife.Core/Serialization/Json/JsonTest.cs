@@ -4,18 +4,18 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.Serialization.Formatters.Binary;
-using System.Text;
-using System.Threading;
 using NewLife.Log;
 using NewLife.Reflection;
 using NewLife.Security;
-using NewLife.Serialization;
+
 
 #if DEBUG
 namespace NewLife.Serialization
 {
+    /// <summary>Json测试</summary>
     public static class JsonTest
     {
+        /// <summary>开始测试</summary>
         public static void Start()
         {
             // 提升进程优先级
@@ -25,7 +25,7 @@ namespace NewLife.Serialization
             var hosts = typeof(IJsonHost).GetAllSubclasses().Select(e => e.CreateInstance() as IJsonHost).ToArray();
             Console.Clear();
 
-            for (int i = 0; i < 2; i++)
+            for (var i = 0; i < 2; i++)
             {
                 var obj = Create(i > 0);
 
@@ -82,36 +82,37 @@ namespace NewLife.Serialization
             }
         }
 
-        static JsObject Create(Boolean ext)
+        private static JsObject Create(Boolean ext)
         {
-            var obj = new JsObject();
-
-            obj.ID = Rand.Next();
-            obj.Name = "新生命团队，学无先后达者为师";
-            obj.Enable = Rand.Next(2) > 0;
-            obj.Guid = Guid.NewGuid();
-            obj.Time = DateTime.Now;
+            var obj = new JsObject
+            {
+                ID = Rand.Next(),
+                Name = "新生命团队，学无先后达者为师",
+                Enable = Rand.Next(2) > 0,
+                Guid = Guid.NewGuid(),
+                Time = DateTime.Now
+            };
             //obj.Data = Rand.NextBytes(16);
 
             if (ext)
             {
                 var n = Rand.Next(2, 10);
                 obj.Points = new Double[n];
-                for (int i = 0; i < n; i++)
+                for (var i = 0; i < n; i++)
                 {
                     obj.Points[i] = (Double)Rand.Next() / 10000;
                 }
 
                 obj.Items = new List<String>();
                 n = Rand.Next(2, 10);
-                for (int i = 0; i < n; i++)
+                for (var i = 0; i < n; i++)
                 {
                     obj.Items.Add(Rand.NextString(32));
                 }
 
                 obj.Container = new Dictionary<String, String>();
                 n = Rand.Next(2, 10);
-                for (int i = 0; i < n; i++)
+                for (var i = 0; i < n; i++)
                 {
                     obj.Container.Add("元素" + (i + 1), Rand.NextString(32));
                 }
@@ -122,7 +123,7 @@ namespace NewLife.Serialization
     }
 
     [Serializable]
-    class JsObject
+    internal class JsObject
     {
         public Int32 ID { get; set; }
 

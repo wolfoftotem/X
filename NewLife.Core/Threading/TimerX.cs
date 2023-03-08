@@ -1,270 +1,392 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
 using NewLife.Log;
 
-namespace NewLife.Threading
+#nullable enable
+namespace NewLife.Threading;
+
+/// <summary>不可重入的定时器，支持Cron</summary>
+/// <remarks>
+/// 文档 https://newlifex.com/core/timerx
+/// 
+/// 为了避免系统的Timer可重入的问题，差别在于本地调用完成后才开始计算时间间隔。这实际上也是经常用到的。
+/// 
+/// 因为挂载在静态列表上，必须从外部主动调用<see cref="IDisposable.Dispose"/>才能销毁定时器。
+/// 但是要注意GC回收定时器实例。
+/// 
+/// 该定时器不能放入太多任务，否则适得其反！
+/// 
+/// TimerX必须维持对象，否则Scheduler也没有维持对象时，大家很容易一起被GC回收。
+/// </remarks>
+public class TimerX : IDisposable
 {
-    /// <summary>不可重入的定时器。</summary>
-    /// <remarks>
-    /// 为了避免系统的Timer可重入的问题，差别在于本地调用完成后才开始计算时间间隔。这实际上也是经常用到的。
-    /// 
-    /// 因为挂载在静态列表上，必须从外部主动调用<see cref="IDisposable.Dispose"/>才能销毁定时器。
-    /// 因为<see cref="Callback"/>采用弱引用，当回调函数所在对象被销毁时，对应的定时器可以自动销毁。
-    /// 
-    /// 该定时器不能放入太多任务，否则适得其反！
-    /// 
-    /// TimerX必须维持对象，否则很容易被GC回收。
-    /// </remarks>
-    public class TimerX : /*DisposeBase*/IDisposable
+    #region 属性
+    /// <summary>编号</summary>
+    public Int32 Id { get; internal set; }
+
+    /// <summary>所属调度器</summary>
+    public TimerScheduler Scheduler { get; private set; }
+
+    /// <summary>目标对象。弱引用，使得调用方对象可以被GC回收</summary>
+    internal readonly WeakReference Target;
+
+    /// <summary>委托方法</summary>
+    internal readonly MethodInfo Method;
+
+    internal readonly Boolean IsAsyncTask;
+
+    /// <summary>获取/设置 用户数据</summary>
+    public Object? State { get; set; }
+
+    /// <summary>基准时间。开机时间</summary>
+    private static DateTime _baseTime;
+
+    private Int64 _nextTick;
+    /// <summary>下一次执行时间。开机以来嘀嗒数，无惧时间回拨问题</summary>
+    public Int64 NextTick => _nextTick;
+
+    /// <summary>获取/设置 下一次调用时间</summary>
+    public DateTime NextTime => _baseTime.AddMilliseconds(_nextTick);
+
+    /// <summary>获取/设置 调用次数</summary>
+    public Int32 Timers { get; internal set; }
+
+    /// <summary>获取/设置 间隔周期。毫秒，设为0或-1则只调用一次</summary>
+    public Int32 Period { get; set; }
+
+    /// <summary>获取/设置 异步执行任务。默认false</summary>
+    public Boolean Async { get; set; }
+
+    /// <summary>获取/设置 绝对精确时间执行。默认false</summary>
+    public Boolean Absolutely { get; set; }
+
+    /// <summary>调用中</summary>
+    public Boolean Calling { get; internal set; }
+
+    /// <summary>平均耗时。毫秒</summary>
+    public Int32 Cost { get; internal set; }
+
+    /// <summary>判断任务是否执行的委托。一般跟异步配合使用，避免频繁从线程池借出线程</summary>
+    public Func<Boolean>? CanExecute { get; set; }
+
+    /// <summary>Cron表达式，实现复杂的定时逻辑</summary>
+    public Cron? Cron => _cron;
+
+    /// <summary>链路追踪。追踪每一次定时事件</summary>
+    public ITracer? Tracer { get; set; }
+
+    /// <summary>链路追踪名称。默认使用方法名</summary>
+    public String TracerName { get; set; }
+
+    private DateTime _AbsolutelyNext;
+    private Cron? _cron;
+    #endregion
+
+    #region 静态
+#if NET45
+    private static readonly ThreadLocal<TimerX?> _Current = new();
+#else
+    private static readonly AsyncLocal<TimerX?> _Current = new();
+#endif
+    /// <summary>当前定时器</summary>
+    public static TimerX? Current { get => _Current.Value; set => _Current.Value = value; }
+    #endregion
+
+    #region 构造
+    private TimerX(Object? target, MethodInfo method, Object? state, String? scheduler = null)
     {
-        #region 属性
-        /// <summary>回调</summary>
-        public WeakAction<Object> Callback { get; set; }
+        Target = new WeakReference(target);
+        Method = method;
+        State = state;
 
-        /// <summary>用户数据</summary>
-        public Object State { get; set; }
+        // 使用开机滴答作为定时调度基准
+        _nextTick = Runtime.TickCount64;
+        _baseTime = DateTime.Now.AddMilliseconds(-_nextTick);
 
-        /// <summary>下一次调用时间</summary>
-        public DateTime NextTime { get; set; }
+        Scheduler = (scheduler == null || scheduler.IsNullOrEmpty()) ? TimerScheduler.Default : TimerScheduler.Create(scheduler);
+        //Scheduler.Add(this);
 
-        /// <summary>调用次数</summary>
-        public Int32 Timers { get; private set; }
-
-        /// <summary>间隔周期。毫秒，设为0则只调用一次</summary>
-        public Int32 Period { get; set; }
-
-        /// <summary>调用中</summary>
-        public Boolean Calling { get; private set; }
-        #endregion
-
-        #region 构造
-        /// <summary>实例化一个不可重入的定时器</summary>
-        /// <param name="callback">委托</param>
-        /// <param name="state">用户数据</param>
-        /// <param name="dueTime">多久之后开始。毫秒</param>
-        /// <param name="period">间隔周期。毫秒</param>
-        public TimerX(WaitCallback callback, Object state, Int32 dueTime, Int32 period)
-        {
-            if (callback == null) throw new ArgumentNullException("callback");
-            if (dueTime < 0) throw new ArgumentOutOfRangeException("dueTime");
-            if (period < 0) throw new ArgumentOutOfRangeException("period");
-
-            Callback = new WeakAction<Object>(callback);
-            State = state;
-            Period = period;
-
-            NextTime = DateTime.Now.AddMilliseconds(dueTime);
-
-            TimerXHelper.Add(this);
-        }
-
-        /// <summary>销毁定时器</summary>
-        public void Dispose()
-        {
-            TimerXHelper.Remove(this);
-        }
-        #endregion
-
-        #region 静态方法
-        /// <summary>延迟执行一个委托</summary>
-        /// <param name="callback"></param>
-        /// <param name="ms"></param>
-        /// <returns></returns>
-        public static TimerX Delay(WaitCallback callback, Int32 ms)
-        {
-            var timer = new TimerX(callback, null, ms, 0);
-            return timer;
-        }
-        #endregion
-
-        #region 辅助
-        /// <summary>已重载</summary>
-        /// <returns></returns>
-        public override string ToString()
-        {
-            return Callback != null ? "" + Callback : base.ToString();
-        }
-        #endregion
-
-        #region 设置
-        /// <summary>是否开启调试，输出更多信息</summary>
-        public static Boolean Debug { get; set; }
-
-        static void WriteLog(String format, params Object[] args)
-        {
-            if (Debug) XTrace.WriteLine(format, args);
-        }
-        #endregion
-
-        #region 内部助手
-        static class TimerXHelper
-        {
-            static Thread thread;
-
-            static HashSet<TimerX> timers = new HashSet<TimerX>();
-
-            /// <summary>把定时器加入队列</summary>
-            /// <param name="timer"></param>
-            public static void Add(TimerX timer)
-            {
-                WriteLog("TimerX.Add {0}ms {1}", timer.Period, timer);
-
-                lock (timers)
-                {
-                    timers.Add(timer);
-
-                    if (thread == null)
-                    {
-                        thread = new Thread(Process);
-                        //thread.Name = "TimerX";
-                        thread.Name = "T";
-                        thread.IsBackground = true;
-                        thread.Start();
-                    }
-
-                    var e = waitForTimer;
-                    if (e != null)
-                    {
-                        var swh = e.SafeWaitHandle;
-                        if (swh != null && !swh.IsClosed) e.Set();
-                    }
-                }
-            }
-
-            public static void Remove(TimerX timer)
-            {
-                if (timer == null) return;
-
-                WriteLog("TimerX.Remove {0}", timer);
-
-                lock (timers)
-                {
-                    if (timers.Contains(timer)) timers.Remove(timer);
-                }
-            }
-
-            static AutoResetEvent waitForTimer;
-            static Int32 period = 10;
-
-            /// <summary>调度主程序</summary>
-            /// <param name="state"></param>
-            static void Process(Object state)
-            {
-                while (true)
-                {
-                    try
-                    {
-                        var arr = GetTimers();
-
-                        var now = DateTime.Now;
-
-                        // 设置一个较大的间隔，内部会根据处理情况调整该值为最合理值
-                        period = 60000;
-                        foreach (var timer in arr)
-                        {
-                            if (CheckTime(timer, now)) ProcessItem(timer);
-                        }
-                    }
-                    catch (ThreadAbortException) { break; }
-                    catch (ThreadInterruptedException) { break; }
-                    catch { }
-
-                    if (waitForTimer == null) waitForTimer = new AutoResetEvent(false);
-                    waitForTimer.WaitOne(period, false);
-                }
-            }
-
-            /// <summary>准备好定时器列表</summary>
-            /// <returns></returns>
-            static TimerX[] GetTimers()
-            {
-                if (timers == null || timers.Count < 1)
-                {
-                    // 使用事件量来控制线程
-                    if (waitForTimer != null) waitForTimer.Close();
-
-                    // 没有任务，无线等待
-                    waitForTimer = new AutoResetEvent(false);
-                    waitForTimer.WaitOne(Timeout.Infinite, false);
-                }
-
-                lock (timers)
-                {
-                    return timers.ToArray();
-                }
-            }
-
-            /// <summary>检查定时器是否到期</summary>
-            /// <param name="timer"></param>
-            /// <param name="now"></param>
-            /// <returns></returns>
-            static Boolean CheckTime(TimerX timer, DateTime now)
-            {
-                // 删除过期的，为了避免占用过多CPU资源，TimerX禁止小于10ms的任务调度
-                var p = timer.Period;
-                if (!timer.Callback.IsAlive || p < 10 && p > 0)
-                {
-                    // 周期0表示只执行一次
-                    if (p < 10 && p > 0) XTrace.WriteLine("为了避免占用过多CPU资源，TimerX禁止小于{1}ms<10ms的任务调度，关闭任务{0}", timer, p);
-                    lock (timers)
-                    {
-                        timers.Remove(timer);
-                        timer.Dispose();
-                    }
-                    return false;
-                }
-
-                var ts = timer.NextTime - now;
-                var d = (Int32)ts.TotalMilliseconds;
-                if (d > 0)
-                {
-                    // 缩小间隔，便于快速调用
-                    if (d < period) period = d;
-
-                    return false;
-                }
-
-                return true;
-            }
-
-            /// <summary>处理每一个定时器</summary>
-            /// <param name="timer"></param>
-            static void ProcessItem(TimerX timer)
-            {
-                try
-                {
-                    timer.Calling = true;
-
-                    Action<Object> callback = timer.Callback;
-                    callback(timer.State ?? timer);
-                }
-                catch (ThreadAbortException) { throw; }
-                catch (ThreadInterruptedException) { throw; }
-                // 如果用户代码没有拦截错误，则这里拦截，避免出错了都不知道怎么回事
-                catch (Exception ex) { XTrace.WriteException(ex); }
-                finally
-                {
-                    // 再次读取周期，因为任何函数可能会修改
-                    var p = timer.Period;
-
-                    timer.Timers++;
-                    timer.NextTime = DateTime.Now.AddMilliseconds(p);
-                    timer.Calling = false;
-
-                    // 清理一次性定时器
-                    if (p <= 0)
-                    {
-                        lock (timers)
-                        {
-                            timers.Remove(timer);
-                            timer.Dispose();
-                        }
-                    }
-                    if (p < period) period = p;
-                }
-            }
-        }
-        #endregion
+        TracerName = $"timer:{method.Name}";
     }
+
+    private void Init(Int64 ms)
+    {
+        SetNextTick(ms);
+
+        Scheduler.Add(this);
+    }
+
+    /// <summary>实例化一个不可重入的定时器</summary>
+    /// <param name="callback">委托</param>
+    /// <param name="state">用户数据</param>
+    /// <param name="dueTime">多久之后开始。毫秒</param>
+    /// <param name="period">间隔周期。毫秒</param>
+    /// <param name="scheduler">调度器</param>
+    public TimerX(TimerCallback callback, Object? state, Int32 dueTime, Int32 period, String? scheduler = null) : this(callback.Target, callback.Method, state, scheduler)
+    {
+        if (callback == null) throw new ArgumentNullException(nameof(callback));
+        if (dueTime < 0) throw new ArgumentOutOfRangeException(nameof(dueTime));
+
+        Period = period;
+
+        Init(dueTime);
+    }
+
+    /// <summary>实例化一个不可重入的定时器</summary>
+    /// <param name="callback">委托</param>
+    /// <param name="state">用户数据</param>
+    /// <param name="dueTime">多久之后开始。毫秒</param>
+    /// <param name="period">间隔周期。毫秒</param>
+    /// <param name="scheduler">调度器</param>
+    public TimerX(Func<Object, Task> callback, Object? state, Int32 dueTime, Int32 period, String? scheduler = null) : this(callback.Target, callback.Method, state, scheduler)
+    {
+        if (callback == null) throw new ArgumentNullException(nameof(callback));
+        if (dueTime < 0) throw new ArgumentOutOfRangeException(nameof(dueTime));
+
+        IsAsyncTask = true;
+        Async = true;
+        Period = period;
+
+        Init(dueTime);
+    }
+
+    /// <summary>实例化一个绝对定时器，指定时刻执行，跟当前时间和SetNext无关</summary>
+    /// <param name="callback">委托</param>
+    /// <param name="state">用户数据</param>
+    /// <param name="startTime">绝对开始时间</param>
+    /// <param name="period">间隔周期。毫秒</param>
+    /// <param name="scheduler">调度器</param>
+    public TimerX(TimerCallback callback, Object state, DateTime startTime, Int32 period, String? scheduler = null) : this(callback.Target, callback.Method, state, scheduler)
+    {
+        if (callback == null) throw new ArgumentNullException(nameof(callback));
+        if (startTime <= DateTime.MinValue) throw new ArgumentOutOfRangeException(nameof(startTime));
+        if (period <= 0) throw new ArgumentOutOfRangeException(nameof(period));
+
+        Period = period;
+        Absolutely = true;
+
+        var now = DateTime.Now;
+        var next = startTime;
+        while (next < now) next = next.AddMilliseconds(period);
+
+        var ms = (Int64)(next - now).TotalMilliseconds;
+        _AbsolutelyNext = next;
+        Init(ms);
+    }
+
+    /// <summary>实例化一个绝对定时器，指定时刻执行，跟当前时间和SetNext无关</summary>
+    /// <param name="callback">委托</param>
+    /// <param name="state">用户数据</param>
+    /// <param name="startTime">绝对开始时间</param>
+    /// <param name="period">间隔周期。毫秒</param>
+    /// <param name="scheduler">调度器</param>
+    public TimerX(Func<Object, Task> callback, Object state, DateTime startTime, Int32 period, String? scheduler = null) : this(callback.Target, callback.Method, state, scheduler)
+    {
+        if (callback == null) throw new ArgumentNullException(nameof(callback));
+        if (startTime <= DateTime.MinValue) throw new ArgumentOutOfRangeException(nameof(startTime));
+        if (period <= 0) throw new ArgumentOutOfRangeException(nameof(period));
+
+        IsAsyncTask = true;
+        Async = true;
+        Period = period;
+        Absolutely = true;
+
+        var now = DateTime.Now;
+        var next = startTime;
+        while (next < now) next = next.AddMilliseconds(period);
+
+        var ms = (Int64)(next - now).TotalMilliseconds;
+        _AbsolutelyNext = next;
+        Init(ms);
+    }
+
+    /// <summary>实例化一个Cron定时器</summary>
+    /// <param name="callback">委托</param>
+    /// <param name="state">用户数据</param>
+    /// <param name="cronExpression">Cron表达式</param>
+    /// <param name="scheduler">调度器</param>
+    public TimerX(TimerCallback callback, Object state, String cronExpression, String? scheduler = null) : this(callback.Target, callback.Method, state, scheduler)
+    {
+        if (callback == null) throw new ArgumentNullException(nameof(callback));
+        if (cronExpression.IsNullOrEmpty()) throw new ArgumentNullException(nameof(cronExpression));
+
+        _cron = new Cron();
+        if (!_cron.Parse(cronExpression)) throw new ArgumentException("无效的Cron表达式", nameof(cronExpression));
+
+        Absolutely = true;
+
+        var now = DateTime.Now;
+        var next = _cron.GetNext(now);
+        var ms = (Int64)(next - now).TotalMilliseconds;
+        _AbsolutelyNext = next;
+        Init(ms);
+        //Init(_AbsolutelyNext = _cron.GetNext(DateTime.Now));
+    }
+
+    /// <summary>实例化一个Cron定时器</summary>
+    /// <param name="callback">委托</param>
+    /// <param name="state">用户数据</param>
+    /// <param name="cronExpression">Cron表达式</param>
+    /// <param name="scheduler">调度器</param>
+    public TimerX(Func<Object, Task> callback, Object state, String cronExpression, String? scheduler = null) : this(callback.Target, callback.Method, state, scheduler)
+    {
+        if (callback == null) throw new ArgumentNullException(nameof(callback));
+        if (cronExpression.IsNullOrEmpty()) throw new ArgumentNullException(nameof(cronExpression));
+
+        _cron = new Cron();
+        if (!_cron.Parse(cronExpression)) throw new ArgumentException("无效的Cron表达式", nameof(cronExpression));
+
+        IsAsyncTask = true;
+        Async = true;
+        Absolutely = true;
+
+        var now = DateTime.Now;
+        var next = _cron.GetNext(now);
+        var ms = (Int64)(next - now).TotalMilliseconds;
+        _AbsolutelyNext = next;
+        Init(ms);
+        //Init(_AbsolutelyNext = _cron.GetNext(DateTime.Now));
+    }
+
+    /// <summary>销毁定时器</summary>
+    public void Dispose()
+    {
+        Dispose(true);
+
+        // 告诉GC，不要调用析构函数
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>销毁</summary>
+    /// <param name="disposing"></param>
+    protected virtual void Dispose(Boolean disposing)
+    {
+        if (disposing)
+        {
+            // 释放托管资源
+        }
+
+        // 释放非托管资源
+        Scheduler?.Remove(this, disposing ? "Dispose" : "GC");
+    }
+    #endregion
+
+    #region 方法
+    /// <summary>是否已设置下一次时间</summary>
+    internal Boolean hasSetNext;
+
+    private void SetNextTick(Int64 ms)
+    {
+        // 使用开机滴答来做定时调度，无惧时间回拨，每次修正时间基准
+        var tick = Runtime.TickCount64;
+        _baseTime = DateTime.Now.AddMilliseconds(-tick);
+        _nextTick = tick + ms;
+    }
+
+    /// <summary>设置下一次运行时间</summary>
+    /// <param name="ms">小于等于0表示马上调度</param>
+    public void SetNext(Int32 ms)
+    {
+        //NextTime = DateTime.Now.AddMilliseconds(ms);
+
+        SetNextTick(ms);
+
+        hasSetNext = true;
+
+        Scheduler.Wake();
+    }
+
+    /// <summary>设置下一次执行时间，并获取间隔</summary>
+    /// <returns>返回下一次执行的间隔时间，不能小于等于0，否则定时器被销毁</returns>
+    internal Int32 SetAndGetNextTime()
+    {
+        // 如果已设置
+        var period = Period;
+        var nowTick = Runtime.TickCount64;
+        if (hasSetNext)
+        {
+            var ts = (Int32)(_nextTick - nowTick);
+            return ts > 0 ? ts : period;
+        }
+
+        if (Absolutely)
+        {
+            // Cron以当前时间开始计算下一次
+            // 绝对时间还没有到时，不计算下一次
+            var now = DateTime.Now;
+            DateTime next;
+            if (_cron != null)
+            {
+                next = _cron.GetNext(now);
+
+                // 如果cron计算得到的下一次时间过近，则需要重新计算
+                if ((next - now).TotalMilliseconds < 1000) next = _cron.GetNext(next);
+            }
+            else
+            {
+                // 能够处理基准时间变大，但不能处理基准时间变小
+                next = _AbsolutelyNext;
+                while (next < now) next = next.AddMilliseconds(period);
+            }
+
+            // 即使基准时间改变，也不影响绝对时间定时器的执行时刻
+            _AbsolutelyNext = next;
+            var ts = (Int32)Math.Round((next - now).TotalMilliseconds);
+            SetNextTick(ts);
+
+            return ts > 0 ? ts : period;
+        }
+        else
+        {
+            //NextTime = DateTime.Now.AddMilliseconds(period);
+            SetNextTick(period);
+
+            return period;
+        }
+    }
+    #endregion
+
+    #region 静态方法
+    /// <summary>延迟执行一个委托。特别要小心，很可能委托还没被执行，对象就被gc回收了</summary>
+    /// <param name="callback"></param>
+    /// <param name="ms"></param>
+    /// <returns></returns>
+    public static TimerX Delay(TimerCallback callback, Int32 ms) => new(callback, null, ms, 0) { Async = true };
+
+    private static TimerX? _NowTimer;
+    private static DateTime _Now;
+    /// <summary>当前时间。定时读取系统时间，避免频繁读取系统时间造成性能瓶颈</summary>
+    public static DateTime Now
+    {
+        get
+        {
+            if (_NowTimer == null)
+            {
+                lock (TimerScheduler.Default)
+                {
+                    if (_NowTimer == null)
+                    {
+                        // 多线程下首次访问Now可能取得空时间
+                        _Now = DateTime.Now;
+
+                        _NowTimer = new TimerX(CopyNow, null, 0, 500);
+                    }
+                }
+            }
+
+            return _Now;
+        }
+    }
+
+    private static void CopyNow(Object? state) => _Now = DateTime.Now;
+    #endregion
+
+    #region 辅助
+    /// <summary>已重载</summary>
+    /// <returns></returns>
+    public override String ToString() => $"[{Id}]{Method.DeclaringType?.Name}.{Method.Name} ({(_cron != null ? _cron.ToString() : (Period + "ms"))})";
+    #endregion
 }
+#nullable restore

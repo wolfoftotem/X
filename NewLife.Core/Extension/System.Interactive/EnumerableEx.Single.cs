@@ -156,22 +156,22 @@ namespace System.Linq
         }
 
 #if !NO_RXINTERFACES
-        /// <summary>
-        /// Lazily invokes observer methods for each value in the sequence, and upon successful or exceptional termination.
-        /// </summary>
-        /// <typeparam name="TSource">Source sequence element type.</typeparam>
-        /// <param name="source">Source sequence.</param>
-        /// <param name="observer">Observer to invoke notification calls on.</param>
-        /// <returns>Sequence exhibiting the side-effects of observer method invocation upon enumeration.</returns>
-        public static IEnumerable<TSource> Do<TSource>(this IEnumerable<TSource> source, IObserver<TSource> observer)
-        {
-            if (source == null)
-                throw new ArgumentNullException("source");
-            if (observer == null)
-                throw new ArgumentNullException("observer");
+        ///// <summary>
+        ///// Lazily invokes observer methods for each value in the sequence, and upon successful or exceptional termination.
+        ///// </summary>
+        ///// <typeparam name="TSource">Source sequence element type.</typeparam>
+        ///// <param name="source">Source sequence.</param>
+        ///// <param name="observer">Observer to invoke notification calls on.</param>
+        ///// <returns>Sequence exhibiting the side-effects of observer method invocation upon enumeration.</returns>
+        //public static IEnumerable<TSource> Do<TSource>(this IEnumerable<TSource> source, IObserver<TSource> observer)
+        //{
+        //    if (source == null)
+        //        throw new ArgumentNullException("source");
+        //    if (observer == null)
+        //        throw new ArgumentNullException("observer");
 
-            return DoHelper(source, observer.OnNext, observer.OnError, observer.OnCompleted);
-        }
+        //    return DoHelper(source, observer.OnNext, observer.OnError, observer.OnCompleted);
+        //}
 #endif
 
         private static IEnumerable<TSource> DoHelper<TSource>(this IEnumerable<TSource> source, Action<TSource> onNext, Action<Exception> onError, Func onCompleted)

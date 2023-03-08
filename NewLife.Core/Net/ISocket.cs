@@ -2,7 +2,10 @@
 using System.IO;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Tasks;
+using NewLife.Data;
 using NewLife.Log;
+using NewLife.Model;
 
 namespace NewLife.Net
 {
@@ -20,7 +23,7 @@ namespace NewLife.Net
         String Name { get; set; }
 
         /// <summary>基础Socket对象</summary>
-        Socket Socket { get; /*set;*/ }
+        Socket Client { get; }
 
         /// <summary>本地地址</summary>
         NetUri Local { get; set; }
@@ -28,14 +31,12 @@ namespace NewLife.Net
         /// <summary>端口</summary>
         Int32 Port { get; set; }
 
-        /// <summary>是否抛出异常，默认false不抛出。Send/Receive时可能发生异常，该设置决定是直接抛出异常还是通过<see cref="Error"/>事件</summary>
-        Boolean ThrowException { get; set; }
-
-        /// <summary>发送统计</summary>
-        IStatistics StatSend { get; set; }
-
-        /// <summary>接收统计</summary>
-        IStatistics StatReceive { get; set; }
+        /// <summary>消息管道。收发消息都经过管道处理器，进行协议编码解码</summary>
+        /// <remarks>
+        /// 1，接收数据解码时，从前向后通过管道处理器；
+        /// 2，发送数据编码时，从后向前通过管道处理器；
+        /// </remarks>
+        IPipeline Pipeline { get; set; }
 
         /// <summary>日志提供者</summary>
         ILog Log { get; set; }
@@ -45,13 +46,16 @@ namespace NewLife.Net
 
         /// <summary>是否输出接收日志。默认false</summary>
         Boolean LogReceive { get; set; }
+
+        /// <summary>APM性能追踪器</summary>
+        ITracer Tracer { get; set; }
         #endregion
 
         #region 方法
         /// <summary>已重载。日志加上前缀</summary>
         /// <param name="format"></param>
         /// <param name="args"></param>
-        void WriteLog(string format, params object[] args);
+        void WriteLog(String format, params Object[] args);
         #endregion
 
         #region 事件
@@ -61,61 +65,52 @@ namespace NewLife.Net
     }
 
     /// <summary>远程通信Socket，仅具有收发功能</summary>
-    public interface ISocketRemote : ISocket
+    public interface ISocketRemote : ISocket, IExtend3
     {
         #region 属性
+        /// <summary>标识</summary>
+        Int32 ID { get; }
+
         /// <summary>远程地址</summary>
         NetUri Remote { get; set; }
-
-        /// <summary>通信开始时间</summary>
-        DateTime StartTime { get; }
 
         /// <summary>最后一次通信时间，主要表示会话活跃时间，包括收发</summary>
         DateTime LastTime { get; }
         #endregion
 
         #region 发送
-        /// <summary>发送数据</summary>
+        /// <summary>发送原始数据包</summary>
         /// <remarks>
         /// 目标地址由<seealso cref="Remote"/>决定
         /// </remarks>
-        /// <param name="buffer">缓冲区</param>
-        /// <param name="offset">偏移</param>
-        /// <param name="count">数量</param>
+        /// <param name="data">数据包</param>
         /// <returns>是否成功</returns>
-        Boolean Send(Byte[] buffer, Int32 offset = 0, Int32 count = -1);
-
-        /// <summary>异步发送数据</summary>
-        /// <param name="buffer"></param>
-        /// <returns></returns>
-        Boolean SendAsync(Byte[] buffer);
-
-        /// <summary>异步多次发送数据</summary>
-        /// <param name="buffer"></param>
-        /// <param name="times"></param>
-        /// <param name="msInterval"></param>
-        /// <returns></returns>
-        Boolean SendAsync(Byte[] buffer, Int32 times, Int32 msInterval);
-
-        #region 接收
-        /// <summary>接收数据</summary>
-        /// <returns></returns>
-        Byte[] Receive();
-
-        /// <summary>读取指定长度的数据，一般是一帧</summary>
-        /// <param name="buffer">缓冲区</param>
-        /// <param name="offset">偏移</param>
-        /// <param name="count">数量</param>
-        /// <returns>实际读取字节数</returns>
-        Int32 Receive(Byte[] buffer, Int32 offset = 0, Int32 count = -1);
+        Int32 Send(Packet data);
         #endregion
 
-        /// <summary>开始异步接收数据</summary>
-        /// <returns>是否成功</returns>
-        Boolean ReceiveAsync();
+        #region 接收
+        /// <summary>接收数据。阻塞当前线程等待返回</summary>
+        /// <returns></returns>
+        Packet Receive();
 
         /// <summary>数据到达事件</summary>
         event EventHandler<ReceivedEventArgs> Received;
+        #endregion
+
+        #region 消息包
+        /// <summary>异步发送消息并等待响应</summary>
+        /// <param name="message">消息</param>
+        /// <returns></returns>
+        Task<Object> SendMessageAsync(Object message);
+
+        /// <summary>发送消息，不等待响应</summary>
+        /// <param name="message">消息</param>
+        /// <returns></returns>
+        Int32 SendMessage(Object message);
+
+        /// <summary>处理消息数据帧</summary>
+        /// <param name="data">数据帧</param>
+        void Process(IData data);
         #endregion
     }
 
@@ -127,35 +122,27 @@ namespace NewLife.Net
         /// <param name="session">会话</param>
         /// <param name="stream">数据流</param>
         /// <returns>返回是否成功</returns>
-        public static Boolean Send(this ISocketRemote session, Stream stream)
+        public static Int32 Send(this ISocketRemote session, Stream stream)
         {
-            // UDP的最大缓冲区
-            var size = 1460L;
-            var remain = stream.Length - stream.Position;
             // 空数据直接发出
+            var remain = stream.Length - stream.Position;
             if (remain == 0) return session.Send(new Byte[0]);
 
-            // TCP可以加大
-            if (remain > size && session.Socket.SocketType == SocketType.Stream)
-            {
-                // 至少使用发送缓冲区的大小，默认8k
-                size = session.Socket.SendBufferSize;
-                // 超大数据流，缓存加大一千倍
-                while (size < 0x80000000 && remain > size << 10)
-                    size <<= 1;
-            }
-            if (remain < size) size = (Int32)remain;
-            var buffer = new Byte[size];
+            var rs = 0;
+            var buffer = new Byte[8192];
             while (true)
             {
                 var count = stream.Read(buffer, 0, buffer.Length);
                 if (count <= 0) break;
 
-                if (!session.Send(buffer, 0, count)) return false;
+                var pk = new Packet(buffer, 0, count);
+                var count2 = session.Send(pk);
+                if (count2 < 0) break;
+                rs += count2;
 
                 if (count < buffer.Length) break;
             }
-            return true;
+            return rs;
         }
 
         /// <summary>发送字符串</summary>
@@ -163,7 +150,7 @@ namespace NewLife.Net
         /// <param name="msg">要发送的字符串</param>
         /// <param name="encoding">文本编码，默认null表示UTF-8编码</param>
         /// <returns>返回自身，用于链式写法</returns>
-        public static Boolean Send(this ISocketRemote session, String msg, Encoding encoding = null)
+        public static Int32 Send(this ISocketRemote session, String msg, Encoding encoding = null)
         {
             if (String.IsNullOrEmpty(msg)) return session.Send(new Byte[0]);
 
@@ -179,12 +166,25 @@ namespace NewLife.Net
         /// <returns></returns>
         public static String ReceiveString(this ISocketRemote session, Encoding encoding = null)
         {
-            var buffer = session.Receive();
-            if (buffer == null || buffer.Length < 1) return null;
+            var pk = session.Receive();
+            if (pk == null || pk.Count == 0) return null;
 
-            if (encoding == null) encoding = Encoding.UTF8;
-            return encoding.GetString(buffer);
+            return pk.ToStr(encoding ?? Encoding.UTF8);
         }
+        #endregion
+
+        #region 消息包
+        /// <summary>添加处理器</summary>
+        /// <typeparam name="THandler"></typeparam>
+        /// <param name="session">会话</param>
+        public static void Add<THandler>(this ISocket session) where THandler : IHandler, new() => GetPipe(session).Add(new THandler());
+
+        /// <summary>添加处理器</summary>
+        /// <param name="session">会话</param>
+        /// <param name="handler">处理器</param>
+        public static void Add(this ISocket session, IHandler handler) => GetPipe(session).Add(handler);
+
+        private static IPipeline GetPipe(ISocket session) => session.Pipeline ??= new Pipeline();
         #endregion
     }
 }

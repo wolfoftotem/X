@@ -1,12 +1,14 @@
-﻿using System;
+﻿#if __WIN__
+using System;
 using System.Collections.Generic;
 using System.IO.Ports;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Win32;
+using NewLife.Data;
 using NewLife.Log;
 using NewLife.Threading;
-using NewLife;
 
 namespace NewLife.Net
 {
@@ -21,11 +23,9 @@ namespace NewLife.Net
     /// st.Received += (s, e) =>
     /// {
     ///     Console.WriteLine("收到 {0}", e.ToHex());
-    ///     // 返回null表示没有数据需要返回给对方
-    ///     return null;
     /// };
     /// // 开始异步操作
-    /// st.ReceiveAsync();
+    /// st.Open();
     /// 
     /// //var buf = "01080000801A".ToHex();
     /// var buf = "0111C02C".ToHex();
@@ -60,34 +60,23 @@ namespace NewLife.Net
             }
         }
 
-        private String _PortName = "COM1";
         /// <summary>端口名称。默认COM1</summary>
-        public String PortName { get { return _PortName; } set { _PortName = value; } }
+        public String PortName { get; set; } = "COM1";
 
-        private Int32 _BaudRate = 115200;
         /// <summary>波特率。默认115200</summary>
-        public Int32 BaudRate { get { return _BaudRate; } set { _BaudRate = value; } }
+        public Int32 BaudRate { get; set; } = 115200;
 
-        private Parity _Parity = Parity.None;
         /// <summary>奇偶校验位。默认None</summary>
-        public Parity Parity { get { return _Parity; } set { _Parity = value; } }
+        public Parity Parity { get; set; } = Parity.None;
 
-        private Int32 _DataBits = 8;
         /// <summary>数据位。默认8</summary>
-        public Int32 DataBits { get { return _DataBits; } set { _DataBits = value; } }
+        public Int32 DataBits { get; set; } = 8;
 
-        private StopBits _StopBits = StopBits.One;
         /// <summary>停止位。默认One</summary>
-        public StopBits StopBits { get { return _StopBits; } set { _StopBits = value; } }
+        public StopBits StopBits { get; set; } = StopBits.One;
 
-        //private Int32 _FrameSize = 1;
-        ///// <summary>读取的期望帧长度，小于该长度为未满一帧，读取不做返回</summary>
-        ///// <remarks>如果读取超时，也有可能返回</remarks>
-        //public Int32 FrameSize { get { return _FrameSize; } set { _FrameSize = value; } }
-
-        private Int32 _Timeout = 10;
         /// <summary>超时时间。超过该大小未收到数据，说明是另一帧。默认10ms</summary>
-        public Int32 Timeout { get { return _Timeout; } set { _Timeout = value; } }
+        public Int32 Timeout { get; set; } = 10;
 
         private String _Description;
         /// <summary>描述信息</summary>
@@ -104,6 +93,12 @@ namespace NewLife.Net
                 return _Description;
             }
         }
+
+        ///// <summary>粘包处理接口</summary>
+        //public IPacket Packet { get; set; }
+
+        /// <summary>字节超时。数据包间隔，默认20ms</summary>
+        public Int32 ByteTimeout { get; set; } = 20;
         #endregion
 
         #region 构造
@@ -163,122 +158,73 @@ namespace NewLife.Net
             if (sp != null)
             {
                 Serial = null;
-                if (sp.IsOpen)
-                {
-                    if (Received != null) sp.DataReceived -= DataReceived;
-                    sp.Close();
-                }
+                if (Received != null) sp.DataReceived -= DataReceived;
+                if (sp.IsOpen) sp.Close();
 
                 OnDisconnect();
             }
 
             return true;
         }
+        #endregion
 
+        #region 发送
         /// <summary>写入数据</summary>
-        /// <param name="buffer">缓冲区</param>
-        /// <param name="offset">偏移</param>
-        /// <param name="count">数量</param>
-        public virtual Boolean Send(Byte[] buffer, Int32 offset = 0, Int32 count = -1)
+        /// <param name="pk">数据包</param>
+        public virtual Boolean Send(Packet pk)
         {
-            Open();
+            if (!Open()) return false;
 
-            WriteLog("Write:{0}", BitConverter.ToString(buffer));
-
-            if (count < 0) count = buffer.Length - offset;
+            WriteLog("Send:{0}", pk.ToHex());
 
             var sp = Serial;
             lock (sp)
             {
-                sp.Write(buffer, offset, count);
+                sp.Write(pk.Data, pk.Offset, pk.Count);
             }
 
             return true;
         }
 
-        /// <summary>从串口中读取指定长度的数据，一般是一帧</summary>
-        /// <param name="buffer">缓冲区</param>
-        /// <param name="offset">偏移</param>
-        /// <param name="count">数量</param>
+        /// <summary>异步发送数据并等待响应</summary>
+        /// <param name="pk"></param>
         /// <returns></returns>
-        public virtual Int32 Receive(Byte[] buffer, Int32 offset = 0, Int32 count = -1)
+        public virtual async Task<Packet> SendAsync(Packet pk)
         {
-            Open();
+            if (!Open()) return null;
 
-            if (count < 0) count = buffer.Length - offset;
+            //if (Packet == null) Packet = new PacketProvider();
 
-            // 读取数据
-            var bufstart = offset;
-            var bufend = offset + count;
-            var sp = Serial;
-            lock (sp)
+            //var task = Packet.Add(pk, null, Timeout);
+
+            _Source = new TaskCompletionSource<Packet>();
+
+            if (pk != null)
             {
-                WaitMore();
+                WriteLog("SendAsync:{0}", pk.ToHex());
 
-                try
-                {
-                    var size = sp.BytesToRead;
-                    // 计算还有多少可用空间
-                    if (offset + size > bufend) size = bufend - offset;
-                    var data = new Byte[size];
-                    size = sp.Read(data, 0, data.Length);
-                    if (size > 0)
-                    {
-                        buffer.Write(offset, data, 0, size);
-                        offset += size;
-                    }
-                }
-                catch { }
+                // 发送数据
+                Serial.Write(pk.Data, pk.Offset, pk.Count);
             }
 
-            //WriteLog("Read:{0} Expected/True={1}/{2}", buffer.ToHex(bufstart, offset - bufstart), FrameSize, offset - bufstart);
-
-            return offset - bufstart;
+            return await _Source.Task;
         }
 
-        void WaitMore()
+        /// <summary>接收数据</summary>
+        /// <returns></returns>
+        public virtual Packet Receive()
         {
-            var sp = Serial;
+            if (!Open()) return null;
 
-            //// 等待1秒，直到有数据为止
-            //var timeout = sp.ReadTimeout;
-            //if (timeout <= 0) timeout = 200;
-            //var end = DateTime.Now.AddMilliseconds(timeout);
-            //while (sp.BytesToRead < FrameSize && sp.IsOpen && end > DateTime.Now) Thread.SpinWait(1);
+            var task = SendAsync(null);
+            if (Timeout > 0 && !task.Wait(Timeout)) return null;
 
-            if (Timeout <= 0) return;
-            var end = DateTime.Now.AddMilliseconds(Timeout);
-            var count = sp.BytesToRead;
-            while (sp.IsOpen && end > DateTime.Now)
-            {
-                Thread.SpinWait(1);
-                if (count != sp.BytesToRead)
-                {
-                    end = DateTime.Now.AddMilliseconds(Timeout);
-                    count = sp.BytesToRead;
-                }
-            }
+            return task.Result;
         }
         #endregion
 
         #region 异步接收
-        /// <summary>开始监听</summary>
-        public virtual Boolean ReceiveAsync()
-        {
-            if (!Open()) return false;
-
-            //Serial.DataReceived += DataReceived;
-            //Serial.ErrorReceived += Serial_ErrorReceived;
-
-            return true;
-        }
-
-        //void Serial_ErrorReceived(object sender, SerialErrorReceivedEventArgs e)
-        //{
-        //    XTrace.WriteLine("串口{0}错误 {1}", PortName, e.EventType);
-        //}
-
-        void DataReceived(object sender, SerialDataReceivedEventArgs e)
+        void DataReceived(Object sender, SerialDataReceivedEventArgs e)
         {
             // 发送者必须保持一定间隔，每个报文不能太大，否则会因为粘包拆包而出错
             try
@@ -287,12 +233,14 @@ namespace NewLife.Net
                 WaitMore();
                 if (sp.BytesToRead > 0)
                 {
-                    var buf = new byte[sp.BytesToRead];
+                    var buf = new Byte[sp.BytesToRead];
 
                     var count = sp.Read(buf, 0, buf.Length);
-                    if (count != buf.Length) buf = buf.ReadBytes(0, count);
+                    //if (count != buf.Length) buf = buf.ReadBytes(0, count);
+                    //var ms = new MemoryStream(buf, 0, count, false);
+                    var pk = new Packet(buf, 0, count);
 
-                    OnReceive(buf);
+                    ProcessReceive(pk);
                 }
             }
             catch (Exception ex)
@@ -302,21 +250,66 @@ namespace NewLife.Net
             }
         }
 
-        /// <summary>收到数据时触发</summary>
-        /// <param name="buf"></param>
-        protected virtual void OnReceive(Byte[] buf)
+        void WaitMore()
         {
-            if (Received != null)
-            {
-                var e = new ReceivedEventArgs(buf);
-                Received(this, e);
+            var sp = Serial;
 
-                // 数据发回去
-                if (e.Feedback) Serial.Write(buf, 0, buf.Length);
+            var ms = ByteTimeout;
+            var end = DateTime.Now.AddMilliseconds(ms);
+            var count = sp.BytesToRead;
+            while (sp.IsOpen && end > DateTime.Now)
+            {
+                //Thread.SpinWait(1);
+                Thread.Sleep(ms);
+                if (count != sp.BytesToRead)
+                {
+                    end = DateTime.Now.AddMilliseconds(ms);
+                    count = sp.BytesToRead;
+                }
             }
         }
 
-        /// <summary>数据到达事件，事件里调用<see cref="Receive"/>读取数据</summary>
+        void ProcessReceive(Packet pk)
+        {
+            try
+            {
+                //if (Packet == null)
+                OnReceive(pk);
+                //else
+                //{
+                //    // 拆包，多个包多次调用处理程序
+                //    foreach (var msg in Packet.Parse(pk))
+                //    {
+                //        OnReceive(msg);
+                //    }
+                //}
+            }
+            catch (Exception ex)
+            {
+                if (!ex.IsDisposed()) Log.Error("{0}.OnReceive {1}", PortName, ex.Message);
+            }
+        }
+
+        private TaskCompletionSource<Packet> _Source;
+        /// <summary>处理收到的数据。默认匹配同步接收委托</summary>
+        /// <param name="pk"></param>
+        internal virtual void OnReceive(Packet pk)
+        {
+            //// 同步匹配
+            //if (Packet != null && Packet.Match(pk, null)) return;
+
+            if (_Source != null)
+            {
+                _Source.SetResult(pk);
+                _Source = null;
+                return;
+            }
+
+            // 触发事件
+            Received?.Invoke(this, new ReceivedEventArgs { Packet = pk });
+        }
+
+        /// <summary>数据到达事件</summary>
         public event EventHandler<ReceivedEventArgs> Received;
         #endregion
 
@@ -398,7 +391,7 @@ namespace NewLife.Net
                             foreach (var elm in usbvid.GetSubKeyNames())
                             {
                                 var sub = usbvid.OpenSubKey(elm);
-                                if (sub.GetValue("Class") + "" == "Ports")
+                                //if (sub.GetValue("Class") + "" == "Ports")
                                 {
                                     var FriendlyName = sub.GetValue("FriendlyName") + "";
                                     if (FriendlyName.Contains("({0})".F(name)))
@@ -493,29 +486,30 @@ namespace NewLife.Net
 
             Console.ResetColor();
 
-            var sp = new SerialTransport();
-            sp.PortName = name;
+            var sp = new SerialTransport
+            {
+                PortName = name
+            };
 
             return sp;
         }
         #endregion
 
         #region 日志
-        private ILog _Log;
         /// <summary>日志对象</summary>
-        public ILog Log { get { return _Log; } set { _Log = value; } }
+        public ILog Log { get; set; } = Logger.Null;
 
         /// <summary>输出日志</summary>
         /// <param name="format"></param>
         /// <param name="args"></param>
         public void WriteLog(String format, params Object[] args)
         {
-            if (Log != null) Log.Info(format, args);
+            if (Log != null && Log.Enable) Log.Info(format, args);
         }
 
         /// <summary>已重载</summary>
         /// <returns></returns>
-        public override string ToString()
+        public override String ToString()
         {
             if (!String.IsNullOrEmpty(PortName))
                 return PortName;
@@ -525,3 +519,4 @@ namespace NewLife.Net
         #endregion
     }
 }
+#endif

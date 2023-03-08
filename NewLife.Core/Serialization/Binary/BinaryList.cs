@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections;
-using System.Collections.Generic;
 using NewLife.Reflection;
 
 namespace NewLife.Serialization
@@ -9,23 +8,18 @@ namespace NewLife.Serialization
     public class BinaryList : BinaryHandlerBase
     {
         /// <summary>初始化</summary>
-        public BinaryList()
-        {
-            // 优先级
-            Priority = 20;
-        }
+        public BinaryList() => Priority = 20;
 
         /// <summary>写入</summary>
         /// <param name="value"></param>
         /// <param name="type"></param>
         /// <returns></returns>
-        public override bool Write(object value, Type type)
+        public override Boolean Write(Object value, Type type)
         {
-            if (!typeof(IList).IsAssignableFrom(type)) return false;
+            if (!type.As<IList>() && !(value is IList)) return false;
 
-            var list = value as IList;
             // 先写入长度
-            if (list == null || list.Count == 0)
+            if (value is not IList list || list.Count == 0)
             {
                 Host.WriteSize(0);
                 return true;
@@ -46,9 +40,9 @@ namespace NewLife.Serialization
         /// <param name="type"></param>
         /// <param name="value"></param>
         /// <returns></returns>
-        public override bool TryRead(Type type, ref object value)
+        public override Boolean TryRead(Type type, ref Object value)
         {
-            if (!typeof(IList).IsAssignableFrom(type)) return false;
+            if (!type.As<IList>()) return false;
 
             // 先读取长度
             var count = Host.ReadSize();
@@ -57,7 +51,7 @@ namespace NewLife.Serialization
             if (value == null && type != null)
             {
                 // 数组的创建比较特别
-                if (typeof(Array).IsAssignableFrom(type))
+                if (type.As<Array>())
                     value = Array.CreateInstance(type.GetElementTypeEx(), count);
                 else
                     value = type.CreateInstance();
@@ -69,7 +63,7 @@ namespace NewLife.Serialization
             var list = value as IList;
             // 如果是数组，则需要先加起来，再
             //if (value is Array) list = typeof(IList<>).MakeGenericType(value.GetType().GetElementTypeEx()).CreateInstance() as IList;
-            for (int i = 0; i < count; i++)
+            for (var i = 0; i < count; i++)
             {
                 Object obj = null;
                 if (!Host.TryRead(elmType, ref obj)) return false;

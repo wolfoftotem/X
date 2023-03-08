@@ -1608,26 +1608,26 @@ namespace NewLife.Reflection
         }
         #endregion
 
-        /// <summary>在目标进程上执行</summary>
-        /// <param name="pid"></param>
-        public void Run(Int32 pid)
-        {
-            var asm = DataHelper.FromHex(Builder.ToString());
-            if (pid != 0)
-            {
-                var hwnd = OpenProcess(PROCESS_ALL_ACCESS | PROCESS_CREATE_THREAD | PROCESS_VM_WRITE, 0, pid);
-                if (hwnd != 0)
-                {
-                    var addre = VirtualAllocEx(hwnd, 0, asm.Length, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-                    WriteProcessMemory(hwnd, addre, asm, asm.Length, 0);
+        ///// <summary>在目标进程上执行</summary>
+        ///// <param name="pid"></param>
+        //public void Run(Int32 pid)
+        //{
+        //    var asm = DataHelper.FromHex(Builder.ToString());
+        //    if (pid != 0)
+        //    {
+        //        var hwnd = OpenProcess(PROCESS_ALL_ACCESS | PROCESS_CREATE_THREAD | PROCESS_VM_WRITE, 0, pid);
+        //        if (hwnd != 0)
+        //        {
+        //            var addre = VirtualAllocEx(hwnd, 0, asm.Length, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+        //            WriteProcessMemory(hwnd, addre, asm, asm.Length, 0);
 
-                    var threadhwnd = CreateRemoteThread(hwnd, 0, 0, addre, 0, 0, ref pid);
-                    VirtualFreeEx(hwnd, addre, asm.Length, MEM_RELEASE);
-                    CloseHandle(threadhwnd);
-                    CloseHandle(hwnd);
-                }
-            }
-            Builder.Length = 0;
-        }
+        //            var threadhwnd = CreateRemoteThread(hwnd, 0, 0, addre, 0, 0, ref pid);
+        //            VirtualFreeEx(hwnd, addre, asm.Length, MEM_RELEASE);
+        //            CloseHandle(threadhwnd);
+        //            CloseHandle(hwnd);
+        //        }
+        //    }
+        //    Builder.Length = 0;
+        //}
     }
 }

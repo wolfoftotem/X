@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.Serialization;
 using System.Xml;
 using System.Xml.Schema;
 using System.Xml.Serialization;
-using NewLife.Reflection;
 
 namespace NewLife.Xml
 {
@@ -11,6 +11,7 @@ namespace NewLife.Xml
     /// <typeparam name="TKey"></typeparam>
     /// <typeparam name="TValue"></typeparam>
     [XmlRoot("Dictionary")]
+    [Serializable]
     public class SerializableDictionary<TKey, TValue> : Dictionary<TKey, TValue>, IXmlSerializable
     {
         /// <summary></summary>
@@ -20,17 +21,13 @@ namespace NewLife.Xml
         /// <param name="dictionary"></param>
         public SerializableDictionary(IDictionary<TKey, TValue> dictionary) : base(dictionary) { }
 
-        //public SerializableDictionary(IEqualityComparer<TKey> comparer) : base(comparer) { }
-
-        //public SerializableDictionary(int capacity) : base(capacity) { }
-
-        //public SerializableDictionary(int capacity, IEqualityComparer<TKey> comparer) : base(capacity, comparer) { }
-
-        //protected SerializableDictionary(SerializationInfo info, StreamingContext context) : base(info, context) { }
+        /// <summary></summary>
+        /// <param name="serializationInfo"></param>
+        /// <param name="streamingContext"></param>
+        protected SerializableDictionary(SerializationInfo serializationInfo, StreamingContext streamingContext) : base(serializationInfo, streamingContext) { }
 
         #region IXmlSerializable 成员
-
-        XmlSchema IXmlSerializable.GetSchema() { return null; }
+        XmlSchema IXmlSerializable.GetSchema() => null;
 
         /// <summary>读取Xml</summary>
         /// <param name="reader">Xml读取器</param>
@@ -54,7 +51,7 @@ namespace NewLife.Xml
 
                 reader.ReadEndElement();
 
-                this.Add(key, value);
+                Add(key, value);
                 reader.MoveToContent();
             }
             reader.ReadEndElement();

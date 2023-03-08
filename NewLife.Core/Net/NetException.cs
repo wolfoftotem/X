@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Runtime.Serialization;
 
 namespace NewLife.Net
 {
@@ -27,12 +26,7 @@ namespace NewLife.Net
 
         /// <summary>初始化</summary>
         /// <param name="innerException"></param>
-        public NetException(Exception innerException) : base((innerException != null ? innerException.Message : null), innerException) { }
-
-        /// <summary>初始化</summary>
-        /// <param name="info"></param>
-        /// <param name="context"></param>
-        protected NetException(SerializationInfo info, StreamingContext context) : base(info, context) { }
+        public NetException(Exception innerException) : base((innerException?.Message), innerException) { }
         #endregion
     }
 }

@@ -7,9 +7,23 @@ namespace NewLife.Log
     /// <summary>复合日志提供者，多种方式输出</summary>
     public class CompositeLog : Logger
     {
-        private List<ILog> _Logs = new List<ILog>();
         /// <summary>日志提供者集合</summary>
-        public List<ILog> Logs { get { return _Logs; } set { _Logs = value; } }
+        public List<ILog> Logs { get; set; } = new List<ILog>();
+
+        /// <summary>日志等级，只输出大于等于该级别的日志，默认Info，打开NewLife.Debug时默认为最低的Debug</summary>
+        public override LogLevel Level
+        {
+            get => base.Level; set
+            {
+                base.Level = value;
+
+                foreach (var item in Logs)
+                {
+                    // 使用外层层级
+                    item.Level = Level;
+                }
+            }
+        }
 
         /// <summary>实例化</summary>
         public CompositeLog() { }
@@ -36,7 +50,7 @@ namespace NewLife.Log
         /// <summary>删除日志提供者</summary>
         /// <param name="log"></param>
         /// <returns></returns>
-        public CompositeLog Remove(ILog log) { if (Logs.Contains(log))Logs.Remove(log); return this; }
+        public CompositeLog Remove(ILog log) { if (Logs.Contains(log)) Logs.Remove(log); return this; }
 
         /// <summary>写日志</summary>
         /// <param name="level"></param>
@@ -65,8 +79,7 @@ namespace NewLife.Log
                     if (item is TLog) return item as TLog;
 
                     // 递归获取内层日志
-                    var cmp = item as CompositeLog;
-                    if (cmp != null)
+                    if (item is CompositeLog cmp)
                     {
                         var log = cmp.Get<TLog>();
                         if (log != null) return log;
@@ -77,26 +90,16 @@ namespace NewLife.Log
             return null;
         }
 
-        //public ILog Get(Type type)
-        //{
-        //    foreach (var item in Logs)
-        //    {
-        //        if (item != null && type.IsAssignableFrom(item.GetType())) return item;
-        //    }
-
-        //    return null;
-        //}
-
         /// <summary>已重载。</summary>
         /// <returns></returns>
-        public override string ToString()
+        public override String ToString()
         {
             var sb = new StringBuilder();
-            sb.Append(this.GetType().Name);
+            sb.Append(GetType().Name);
 
             foreach (var item in Logs)
             {
-                sb.Append(" ");
+                sb.Append(' ');
                 sb.Append(item + "");
             }
 

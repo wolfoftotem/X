@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Web.Script.Serialization;
+using System.Xml.Serialization;
+using NewLife.Collections;
 using NewLife.Data;
 
 namespace NewLife.Web
@@ -26,23 +29,24 @@ namespace NewLife.Web
         }
 
         /// <summary>名称类。用户可根据需要修改Url参数名</summary>
-        public __ _ = new __();
+        [XmlIgnore, ScriptIgnore]
+        public static __ _ = new __();
         #endregion
 
         #region 扩展属性
-        private IDictionary<String, String> _Params;
         /// <summary>参数集合</summary>
-        public IDictionary<String, String> Params { get { return _Params ?? (_Params = WebHelper.Params); } set { _Params = value; } }
+        [XmlIgnore, ScriptIgnore]
+        public IDictionary<String, String> Params { get; set; } = new NullableDictionary<String, String>(StringComparer.OrdinalIgnoreCase);
 
-        private String _PageUrlTemplate = "<a href=\"{链接}\">{名称}</a>";
         /// <summary>分页链接模版。内部将会替换{链接}和{名称}</summary>
-        public String PageUrlTemplate { get { return _PageUrlTemplate; } set { _PageUrlTemplate = value; } }
+        [XmlIgnore, ScriptIgnore]
+        public String PageUrlTemplate { get; set; } = "<a href=\"{链接}\">{名称}</a>";
 
-        private static PageParameter _def = new PageParameter();
+        private static readonly PageParameter _def = new PageParameter();
 
-        private PageParameter _Default = _def;
         /// <summary>默认参数。如果分页参数为默认参数，则不参与构造Url</summary>
-        public PageParameter Default { get { return _Default; } set { _Default = value; } }
+        [XmlIgnore, ScriptIgnore]
+        public PageParameter Default { get; set; } = _def;
 
         /// <summary>获取/设置 参数</summary>
         /// <param name="key"></param>
@@ -84,32 +88,19 @@ namespace NewLife.Web
 
         /// <summary>用另一个分页参数实例化</summary>
         /// <param name="pm"></param>
-        public Pager(PageParameter pm) : base(pm) { }
-
-        //public Pager(ICollection collection) { SetParams(collection); }
+        public Pager(PageParameter pm) : base(pm)
+        {
+            if (pm is Pager p)
+            {
+                foreach (var item in p.Params)
+                {
+                    this[item.Key] = item.Value;
+                }
+            }
+        }
         #endregion
 
         #region 方法
-        //public virtual void SetParams(ICollection collection)
-        //{
-        //    foreach (var item in collection)
-        //    {
-        //        var key = item + "";
-        //        var value = item.GetType().FullName + "";
-
-        //        if (key.EqualIgnoreCase(_.Sort))
-        //            Sort = value;
-        //        else if (key.EqualIgnoreCase(_.Desc))
-        //            Desc = value.ToBoolean();
-        //        else if (key.EqualIgnoreCase(_.PageIndex))
-        //            PageIndex = value.ToInt();
-        //        else if (key.EqualIgnoreCase(_.PageSize))
-        //            PageSize = value.ToInt();
-        //        else
-        //            Params.Add(key, value);
-        //    }
-        //}
-
         /// <summary>获取基础Url，用于附加参数</summary>
         /// <param name="where">查询条件，不包含排序和分页</param>
         /// <param name="order">排序</param>
@@ -132,8 +123,8 @@ namespace NewLife.Web
         /// <returns></returns>
         public virtual String GetSortUrl(String name)
         {
-            // 首次访问该排序项，默认升序，重复访问取反
-            var desc = false;
+            // 首次访问该排序项，默认降序，重复访问取反
+            var desc = true;
             if (Sort.EqualIgnoreCase(name)) desc = !Desc;
 
             var url = GetBaseUrl(true, false, true);
@@ -147,7 +138,7 @@ namespace NewLife.Web
         /// <param name="name"></param>
         /// <param name="index"></param>
         /// <returns></returns>
-        public virtual String GetPageUrl(String name, Int32 index)
+        public virtual String GetPageUrl(String name, Int64 index)
         {
             var url = GetBaseUrl(true, true, false);
             // 当前在非首页而要跳回首页，不写页面序号

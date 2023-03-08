@@ -1,10 +1,12 @@
 ﻿using System;
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
+using NewLife.Data;
 
 namespace NewLife.Net
 {
-    /// <summary>网络服务会话接口</summary>
+    /// <summary>网络服务的会话，每个连接一个会话</summary>
     /// <remarks>
     /// 所有应用服务器以会话<see cref="INetSession"/>作为业务处理核心。
     /// 应用服务器收到新会话请求后，通过<see cref="Start"/>启动一个会话处理。
@@ -13,8 +15,8 @@ namespace NewLife.Net
     public interface INetSession : IDisposable2
     {
         #region 属性
-        /// <summary>编号</summary>
-        Int32 ID { get; set; }
+        /// <summary>唯一会话标识</summary>
+        Int32 ID { get; }
 
         /// <summary>主服务</summary>
         NetServer Host { get; set; }
@@ -36,10 +38,8 @@ namespace NewLife.Net
 
         #region 收发
         /// <summary>发送数据</summary>
-        /// <param name="buffer">缓冲区</param>
-        /// <param name="offset">位移</param>
-        /// <param name="size">写入字节数</param>
-        INetSession Send(byte[] buffer, int offset = 0, int size = -1);
+        /// <param name="data">数据包</param>
+        INetSession Send(Packet data);
 
         /// <summary>发送数据流</summary>
         /// <param name="stream"></param>
@@ -49,7 +49,17 @@ namespace NewLife.Net
         /// <summary>发送字符串</summary>
         /// <param name="msg"></param>
         /// <param name="encoding"></param>
-        INetSession Send(string msg, Encoding encoding = null);
+        INetSession Send(String msg, Encoding encoding = null);
+
+        /// <summary>通过管道发送消息，不等待响应</summary>
+        /// <param name="message"></param>
+        /// <returns></returns>
+        Int32 SendMessage(Object message);
+
+        /// <summary>异步发送并等待响应</summary>
+        /// <param name="message"></param>
+        /// <returns></returns>
+        Task<Object> SendMessageAsync(Object message);
 
         /// <summary>数据到达事件</summary>
         event EventHandler<ReceivedEventArgs> Received;
@@ -59,8 +69,7 @@ namespace NewLife.Net
     /// <summary>会话事件参数</summary>
     public class NetSessionEventArgs : EventArgs
     {
-        private INetSession _Session;
         /// <summary>会话</summary>
-        public INetSession Session { get { return _Session; } set { _Session = value; } }
+        public INetSession Session { get; set; }
     }
 }

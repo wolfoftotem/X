@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Globalization;
+using System.Xml;
 
 namespace NewLife.Serialization
 {
@@ -22,6 +23,17 @@ namespace NewLife.Serialization
 
             var writer = Host.GetWriter();
 
+            // 枚举 写入字符串
+            if (type.IsEnum)
+            {
+                if (Host is Xml xml && xml.EnumString)
+                    writer.WriteValue(value + "");
+                else
+                    writer.WriteValue(value.ToLong());
+
+                return true;
+            }
+
             switch (Type.GetTypeCode(type))
             {
                 case TypeCode.Boolean:
@@ -30,14 +42,14 @@ namespace NewLife.Serialization
                 case TypeCode.Byte:
                 case TypeCode.SByte:
                 case TypeCode.Char:
-                    writer.WriteValue((Char)value);
+                    writer.WriteValue(Convert.ToChar(value));
                     return true;
                 case TypeCode.DBNull:
                 case TypeCode.Empty:
-                    writer.WriteValue((Byte)0);
+                    writer.WriteValue(0);
                     return true;
                 case TypeCode.DateTime:
-                    writer.WriteValue((DateTime)value);
+                    writer.WriteValue(((DateTime)value).ToFullString());
                     return true;
                 case TypeCode.Decimal:
                     writer.WriteValue((Decimal)value);
@@ -52,11 +64,11 @@ namespace NewLife.Serialization
                 case TypeCode.UInt16:
                 case TypeCode.Int32:
                 case TypeCode.UInt32:
-                    writer.WriteValue((Int32)value);
+                    writer.WriteValue(Convert.ToInt32(value));
                     return true;
                 case TypeCode.Int64:
                 case TypeCode.UInt64:
-                    writer.WriteValue((Int64)value);
+                    writer.WriteValue(Convert.ToInt64(value));
                     return true;
                 case TypeCode.String:
                     writer.WriteValue(value + "");
@@ -75,13 +87,14 @@ namespace NewLife.Serialization
 
             if (type == typeof(DateTimeOffset))
             {
-                writer.WriteValue((DateTimeOffset)value);
+                //writer.WriteValue((DateTimeOffset)value);
+                writer.WriteValue(((DateTimeOffset)value) + "");
                 return true;
             }
 
             if (type == typeof(TimeSpan))
             {
-                writer.WriteValue((TimeSpan)value);
+                writer.WriteValue(((TimeSpan)value) + "");
                 return true;
             }
 
@@ -105,7 +118,7 @@ namespace NewLife.Serialization
         /// <param name="type"></param>
         /// <param name="value"></param>
         /// <returns></returns>
-        public override bool TryRead(Type type, ref object value)
+        public override Boolean TryRead(Type type, ref Object value)
         {
             if (type == null)
             {
@@ -117,37 +130,46 @@ namespace NewLife.Serialization
 
             if (type == typeof(Guid))
             {
-                value = new Guid(reader.ReadElementContentAsString());
+                value = new Guid(reader.ReadContentAsString());
                 return true;
             }
             else if (type == typeof(Byte[]))
             {
                 // 用字符串长度作为预设缓冲区的长度
                 var buf = new Byte[reader.Value.Length];
-                var count = reader.ReadElementContentAsBase64(buf, 0, buf.Length);
+                var count = reader.ReadContentAsBase64(buf, 0, buf.Length);
                 value = buf.ReadBytes(0, count);
                 return true;
             }
             else if (type == typeof(Char[]))
             {
-                value = reader.ReadElementContentAsString().ToCharArray();
+                value = reader.ReadContentAsString().ToCharArray();
                 return true;
             }
             else if (type == typeof(DateTimeOffset))
             {
-                value = reader.ReadElementContentAs(type, null);
+                //value = reader.ReadContentAs(type, null);
+                value = DateTimeOffset.Parse(reader.ReadContentAsString());
                 return true;
             }
             else if (type == typeof(TimeSpan))
             {
-                value = reader.ReadElementContentAs(type, null);
+                value = TimeSpan.Parse(reader.ReadContentAsString());
                 return true;
             }
 
             var code = Type.GetTypeCode(type);
             if (code == TypeCode.Object) return false;
 
-            var v = reader.ReadElementContentAsString() + "";
+            // 读取异构Xml时可能报错
+            var v = (reader.NodeType == XmlNodeType.Element ? reader.ReadElementContentAsString() : reader.ReadContentAsString()) + "";
+
+            // 枚举
+            if (type.IsEnum)
+            {
+                value = Enum.Parse(type, v);
+                return true;
+            }
 
             switch (code)
             {

@@ -1,5 +1,7 @@
-﻿using System;
+﻿#if NET40
+using System;
 using System.Runtime.Serialization;
+using NewLife;
 
 namespace NewLife.Compression
 {
@@ -8,7 +10,6 @@ namespace NewLife.Compression
     public class ZipException : XException
     {
         #region 构造
-
         /// <summary>初始化</summary>
         public ZipException() { }
 
@@ -30,11 +31,11 @@ namespace NewLife.Compression
         /// <param name="innerException"></param>
         public ZipException(Exception innerException) : base((innerException != null ? innerException.Message : null), innerException) { }
 
-        /// <summary>初始化</summary>
-        /// <param name="info"></param>
-        /// <param name="context"></param>
-        protected ZipException(SerializationInfo info, StreamingContext context) : base(info, context) { }
-
+        ///// <summary>初始化</summary>
+        ///// <param name="info"></param>
+        ///// <param name="context"></param>
+        //protected ZipException(SerializationInfo info, StreamingContext context) : base(info, context) { }
         #endregion
     }
 }
+#endif

@@ -174,6 +174,19 @@ namespace System.Collections.Concurrent
 
             return true;
         }
+
+        public TValue GetOrAdd(TKey key, Func<TKey, TValue> callback)
+        {
+            TValue value;
+            while (true)
+            {
+                if (Backup.TryGetValue(key, out value)) return value;
+
+                value ??= callback(key);
+
+                if (TryAdd(key, value)) return value;
+            }
+        }
         #endregion
 
         #region IDictionary 成员

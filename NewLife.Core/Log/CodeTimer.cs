@@ -20,9 +20,11 @@ namespace NewLife.Log
         /// <returns></returns>
         public static CodeTimer Time(Int32 times, Action<Int32> action, Boolean needTimeOne = true)
         {
-            CodeTimer timer = new CodeTimer();
-            timer.Times = times;
-            timer.Action = action;
+            var timer = new CodeTimer
+            {
+                Times = times,
+                Action = action
+            };
 
             if (needTimeOne) timer.TimeOne();
             timer.Time();
@@ -35,20 +37,20 @@ namespace NewLife.Log
         /// <param name="times">次数</param>
         /// <param name="action">需要计时的委托</param>
         /// <param name="needTimeOne">是否需要预热</param>
-        public static void TimeLine(String title, Int32 times, Action<Int32> action, Boolean needTimeOne = true)
+        public static CodeTimer TimeLine(String title, Int32 times, Action<Int32> action, Boolean needTimeOne = true)
         {
-            var n = Encoding.Default.GetByteCount(title);
+            var n = Encoding.UTF8.GetByteCount(title);
             Console.Write("{0}{1}：", n >= 16 ? "" : new String(' ', 16 - n), title);
 
-            CodeTimer timer = new CodeTimer();
-            timer.Times = times;
-            timer.Action = action;
-            timer.ShowProgress = true;
-
-            ConsoleColor currentForeColor = Console.ForegroundColor;
+            var timer = new CodeTimer
+            {
+                Times = times,
+                Action = action,
+                ShowProgress = true
+            };
+            var currentForeColor = Console.ForegroundColor;
             Console.ForegroundColor = ConsoleColor.Yellow;
-            Int32 left = Console.CursorLeft;
-
+            var left = Console.CursorLeft;
             if (needTimeOne) timer.TimeOne();
             timer.Time();
 
@@ -56,8 +58,9 @@ namespace NewLife.Log
             Thread.Sleep(10);
             Console.CursorLeft = left;
             Console.WriteLine(timer.ToString());
-
             Console.ForegroundColor = currentForeColor;
+
+            return timer;
         }
 
         /// <summary>显示头部</summary>
@@ -66,23 +69,23 @@ namespace NewLife.Log
         {
             Write(title, 16);
             Console.Write("：");
-
-            ConsoleColor currentForeColor = Console.ForegroundColor;
+            var currentForeColor = Console.ForegroundColor;
             Console.ForegroundColor = ConsoleColor.Yellow;
-
             Write("执行时间", 9);
             Console.Write(" ");
             Write("CPU时间", 9);
             Console.Write(" ");
             Write("指令周期", 15);
-            Console.WriteLine("   GC(0/1/2)");
+            Write("GC(0/1/2)", 9);
+            Console.WriteLine("   百分比");
 
+            msBase = 0;
             Console.ForegroundColor = currentForeColor;
         }
 
         static void Write(String name, Int32 max)
         {
-            Int32 len = Encoding.Default.GetByteCount(name);
+            var len = Encoding.UTF8.GetByteCount(name);
             if (len < max) Console.Write(new String(' ', max - len));
             Console.Write(name);
         }
@@ -91,16 +94,16 @@ namespace NewLife.Log
         #region PInvoke
         [DllImport("kernel32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
-        static extern bool QueryThreadCycleTime(IntPtr threadHandle, ref ulong cycleTime);
+        static extern Boolean QueryThreadCycleTime(IntPtr threadHandle, ref UInt64 cycleTime);
 
         [DllImport("kernel32.dll")]
         static extern IntPtr GetCurrentThread();
 
         [DllImport("kernel32.dll", SetLastError = true)]
-        static extern bool GetThreadTimes(IntPtr hThread, out long lpCreationTime, out long lpExitTime, out long lpKernelTime, out long lpUserTime);
+        static extern Boolean GetThreadTimes(IntPtr hThread, out Int64 lpCreationTime, out Int64 lpExitTime, out Int64 lpKernelTime, out Int64 lpUserTime);
 
         static Boolean supportCycle = true;
-        private static ulong GetCycleCount()
+        private static UInt64 GetCycleCount()
         {
             //if (Environment.Version.Major < 6) return 0;
 
@@ -108,7 +111,7 @@ namespace NewLife.Log
 
             try
             {
-                ulong cycleCount = 0;
+                UInt64 cycleCount = 0;
                 QueryThreadCycleTime(GetCurrentThread(), ref cycleCount);
                 return cycleCount;
             }
@@ -119,85 +122,48 @@ namespace NewLife.Log
             }
         }
 
-        private static long GetCurrentThreadTimes()
+        private static Int64 GetCurrentThreadTimes()
         {
-            long l;
-            long kernelTime, userTimer;
-            GetThreadTimes(GetCurrentThread(), out l, out l, out kernelTime, out userTimer);
+            GetThreadTimes(GetCurrentThread(), out _, out _, out var kernelTime, out var userTimer);
             return kernelTime + userTimer;
         }
         #endregion
 
         #region 私有字段
-        ulong cpuCycles = 0;
-        long threadTime = 0;
-        int[] gen;
+        UInt64 cpuCycles = 0;
+        Int64 threadTime = 0;
+        Int32[] gen;
         #endregion
 
         #region 属性
-        private Int32 _Times;
         /// <summary>次数</summary>
-        public Int32 Times
-        {
-            get { return _Times; }
-            set { _Times = value; }
-        }
+        public Int32 Times { get; set; }
 
-        private Action<Int32> _Action;
         /// <summary>迭代方法，如不指定，则使用Time(int index)</summary>
-        public Action<Int32> Action
-        {
-            get { return _Action; }
-            set { _Action = value; }
-        }
+        public Action<Int32> Action { get; set; }
 
-        private Boolean _ShowProgress;
         /// <summary>是否显示控制台进度</summary>
-        public Boolean ShowProgress
-        {
-            get { return _ShowProgress; }
-            set { _ShowProgress = value; }
-        }
+        public Boolean ShowProgress { get; set; }
 
-        private Int32 _Index;
         /// <summary>进度</summary>
-        public Int32 Index
-        {
-            get { return _Index; }
-            set { _Index = value; }
-        }
+        public Int32 Index { get; set; }
 
-        private long _CpuCycles;
         /// <summary>CPU周期</summary>
-        public long CpuCycles
-        {
-            get { return _CpuCycles; }
-            set { _CpuCycles = value; }
-        }
+        public Int64 CpuCycles { get; set; }
 
-        private long _ThreadTime;
-        /// <summary>线程时间，单位是100ns，除以10000转为ms</summary>
-        public long ThreadTime
-        {
-            get { return _ThreadTime; }
-            set { _ThreadTime = value; }
-        }
+        /// <summary>线程时间，单位是ms</summary>
+        public Int64 ThreadTime { get; set; }
 
-        private Int32[] _Gen = new Int32[] { 0, 0, 0 };
         /// <summary>GC代数</summary>
-        public Int32[] Gen
-        {
-            get { return _Gen; }
-            set { _Gen = value; }
-        }
+        public Int32[] Gen { get; set; }
 
-        private TimeSpan _Elapsed;
         /// <summary>执行时间</summary>
-        public TimeSpan Elapsed
-        {
-            get { return _Elapsed; }
-            set { _Elapsed = value; }
-        }
+        public TimeSpan Elapsed { get; set; }
+        #endregion
+
+        #region 构造
+        /// <summary>实例化一个代码计时器</summary>
+        public CodeTimer() => Gen = new Int32[] { 0, 0, 0 };
         #endregion
 
         #region 方法
@@ -207,8 +173,8 @@ namespace NewLife.Log
             if (Times <= 0) throw new XException("非法迭代次数！");
 
             // 设定进程、线程优先级，并在完成时还原
-            ProcessPriorityClass pp = Process.GetCurrentProcess().PriorityClass;
-            ThreadPriority tp = Thread.CurrentThread.Priority;
+            var pp = Process.GetCurrentProcess().PriorityClass;
+            var tp = Thread.CurrentThread.Priority;
             try
             {
                 Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.High;
@@ -236,18 +202,17 @@ namespace NewLife.Log
             GC.Collect(GC.MaxGeneration);
 
             gen = new Int32[GC.MaxGeneration + 1];
-            for (Int32 i = 0; i <= GC.MaxGeneration; i++)
+            for (var i = 0; i <= GC.MaxGeneration; i++)
             {
                 gen[i] = GC.CollectionCount(i);
             }
 
-            Stopwatch watch = new Stopwatch();
-            watch.Start();
+            var watch = Stopwatch.StartNew();
             cpuCycles = GetCycleCount();
             threadTime = GetCurrentThreadTimes();
 
             // 如果未指定迭代方法，则使用内部的Time
-            Action<Int32> action = Action;
+            var action = Action;
             if (action == null)
             {
                 action = Time;
@@ -256,7 +221,7 @@ namespace NewLife.Log
                 Init();
             }
 
-            for (Int32 i = 0; i < Times; i++)
+            for (var i = 0; i < Times; i++)
             {
                 Index = i;
 
@@ -268,17 +233,18 @@ namespace NewLife.Log
                 Finish();
             }
 
-            CpuCycles = (long)(GetCycleCount() - cpuCycles);
-            ThreadTime = GetCurrentThreadTimes() - threadTime;
+            CpuCycles = (Int64)(GetCycleCount() - cpuCycles);
+            // 线程时间，单位是100ns，除以10000转为ms
+            ThreadTime = (GetCurrentThreadTimes() - threadTime) / 10_000;
 
             watch.Stop();
             Elapsed = watch.Elapsed;
 
             // 统计GC代数
-            List<Int32> list = new List<Int32>();
-            for (Int32 i = 0; i <= GC.MaxGeneration; i++)
+            var list = new List<Int32>();
+            for (var i = 0; i <= GC.MaxGeneration; i++)
             {
-                int count = GC.CollectionCount(i) - gen[i];
+                var count = GC.CollectionCount(i) - gen[i];
                 list.Add(count);
             }
             Gen = list.ToArray();
@@ -287,7 +253,7 @@ namespace NewLife.Log
         /// <summary>执行一次迭代，预热所有方法</summary>
         public void TimeOne()
         {
-            Int32 n = Times;
+            var n = Times;
 
             try
             {
@@ -310,15 +276,23 @@ namespace NewLife.Log
 
         #region 进度
         Thread thread;
+        CancellationTokenSource _source;
+
+        /// <summary>基准时间</summary>
+        static Double msBase;
 
         void StartProgress()
         {
             if (!ShowProgress) return;
 
+            _source = new CancellationTokenSource();
+
             // 使用低优先级线程显示进度
-            thread = new Thread(new ParameterizedThreadStart(Progress));
-            thread.IsBackground = true;
-            thread.Priority = ThreadPriority.BelowNormal;
+            thread = new Thread(Progress)
+            {
+                IsBackground = true,
+                Priority = ThreadPriority.BelowNormal
+            };
             thread.Start();
         }
 
@@ -326,34 +300,39 @@ namespace NewLife.Log
         {
             if (thread != null && thread.IsAlive)
             {
-                thread.Abort();
+                _source.Cancel();
+                //thread.Abort();
                 thread.Join(3000);
             }
         }
 
         void Progress(Object state)
         {
-            Int32 left = Console.CursorLeft;
+            var left = Console.CursorLeft;
 
             // 设置光标不可见
-            Boolean cursorVisible = Console.CursorVisible;
+            var cursorVisible = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && Console.CursorVisible;
             Console.CursorVisible = false;
-
-            Stopwatch sw = new Stopwatch();
-            sw.Start();
-            while (true)
+            var sw = Stopwatch.StartNew();
+            while (!_source.IsCancellationRequested)
             {
                 try
                 {
-                    Int32 i = Index;
+                    var i = Index;
                     if (i >= Times) break;
 
                     if (i > 0 && sw.Elapsed.TotalMilliseconds > 10)
                     {
-                        Double d = (Double)i / Times;
-                        Double ms = sw.Elapsed.TotalMilliseconds;
-                        TimeSpan ts = new TimeSpan(0, 0, 0, 0, (Int32)(ms * Times / i));
-                        Console.Write("{0,7:n0}ms {1:p} Total=>{2}", ms, d, ts);
+                        var prog = (Double)i / Times;
+                        var ms = sw.Elapsed.TotalMilliseconds;
+
+                        // 预计总时间
+                        var ts = new TimeSpan(0, 0, 0, 0, (Int32)(ms * Times / i));
+
+                        var speed = i / ms;
+                        var cost = ms / i;
+
+                        Console.Write($"{ms,7:n0}ms {prog:p2} Total=>{ts}");
                         Console.CursorLeft = left;
                     }
                 }
@@ -363,7 +342,6 @@ namespace NewLife.Log
                 Thread.Sleep(500);
             }
             sw.Stop();
-
             Console.CursorLeft = left;
             Console.CursorVisible = cursorVisible;
         }
@@ -372,9 +350,14 @@ namespace NewLife.Log
         #region 重载
         /// <summary>已重载。输出依次分别是：执行时间、CPU线程时间、时钟周期、GC代数</summary>
         /// <returns></returns>
-        public override string ToString()
+        public override String ToString()
         {
-            return String.Format("{0,7:n0}ms {1,7:n0}ms {2,15:n0} {3,3}/{4}/{5}", Elapsed.TotalMilliseconds, ThreadTime / 10000, CpuCycles, Gen[0], Gen[1], Gen[2]);
+            var ms = Elapsed.TotalMilliseconds;
+            if (msBase == 0) msBase = ms;
+            var pc = ms / msBase;
+            _ = ms == 0 ? 0 : Times / ms;
+            _ = Times == 0 ? 0 : ms / Times;
+            return $"{ms,7:n0}ms {ThreadTime,7:n0}ms {CpuCycles,15:n0} {Gen[0],3}/{Gen[1]}/{Gen[2]}\t{pc,8:p2}";
         }
         #endregion
     }

@@ -1,6 +1,9 @@
 ﻿
 namespace System
 {
+    /// <summary>没有参数</summary>
+    public delegate void Action();
+   
     ///// <summary>
     ///// 一个参数
     ///// </summary>

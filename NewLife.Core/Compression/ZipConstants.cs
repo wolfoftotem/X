@@ -1,4 +1,5 @@
-﻿using System;
+﻿#if NET40
+using System;
 
 namespace NewLife.Compression
 {
@@ -137,3 +138,4 @@ namespace NewLife.Compression
         public const UInt32 ZipDirEntrySignature = 0x02014b50;
     }
 }
+#endif

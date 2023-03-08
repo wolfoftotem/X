@@ -2,7 +2,6 @@
 using System.IO;
 using System.Reflection;
 using NewLife.Log;
-using NewLife.Reflection;
 
 namespace NewLife.Web
 {
@@ -14,45 +13,90 @@ namespace NewLife.Web
         /// <param name="disname"></param>
         /// <param name="dll"></param>
         /// <param name="linkName"></param>
-        /// <param name="url"></param>
+        /// <param name="urls">提供下载地址的多个目标页面</param>
         /// <returns></returns>
-        public static Type LoadPlugin(String typeName, String disname, String dll, String linkName, String url)
+        public static Type LoadPlugin(String typeName, String disname, String dll, String linkName, String urls = null)
         {
-            var type = typeName.GetTypeEx(true);
+            //var type = typeName.GetTypeEx(true);
+            var type = Type.GetType(typeName);
             if (type != null) return type;
 
             if (dll.IsNullOrEmpty()) return null;
 
-            // 先检查当前目录，再检查插件目录
-            var file = dll.GetFullPath();
-            if (!File.Exists(file) && Runtime.IsWeb) file = "Bin".GetFullPath().CombinePath(dll);
-            if (!File.Exists(file)) file = Setting.Current.GetPluginPath().CombinePath(dll);
+            var set = Setting.Current;
 
-            // 如果本地没有数据库，则从网络下载
-            if (!File.Exists(file))
+            var file = "";
+            if (!dll.IsNullOrEmpty())
             {
-                XTrace.WriteLine("{0}不存在或平台版本不正确，准备联网获取 {1}", disname ?? dll, url);
-
-                var client = new WebClientX(true, true);
-                client.Log = XTrace.Log;
-                var dir = Path.GetDirectoryName(file);
-                var file2 = client.DownloadLinkAndExtract(url, linkName, dir);
+                // 先检查当前目录，再检查插件目录
+                file = dll.GetFullPath();
+                if (!File.Exists(file)) file = dll.GetBasePath();
+                if (!File.Exists(file)) file = set.PluginPath.CombinePath(dll).GetFullPath();
+                if (!File.Exists(file)) file = set.PluginPath.CombinePath(dll).GetBasePath();
             }
-            if (!File.Exists(file))
+
+            // 尝试直接加载DLL
+            if (File.Exists(file))
             {
-                XTrace.WriteLine("未找到 {0} {1}", disname, dll);
+                try
+                {
+                    var asm = Assembly.LoadFrom(file);
+                    type = asm.GetType(typeName);
+                    if (type != null) return type;
+                }
+                catch (Exception ex)
+                {
+                    XTrace.WriteException(ex);
+                }
+            }
+
+            if (linkName.IsNullOrEmpty()) return null;
+
+            lock (typeName)
+            {
+                if (urls.IsNullOrEmpty()) urls = set.PluginServer;
+
+                // 如果本地没有数据库，则从网络下载
+                if (!File.Exists(file))
+                {
+                    XTrace.WriteLine("{0}不存在或平台版本不正确，准备联网获取 {1}", disname ?? dll, urls);
+
+                    var client = new WebClientX()
+                    {
+                        Log = XTrace.Log
+                    };
+                    var dir = Path.GetDirectoryName(file);
+                    var file2 = client.DownloadLinkAndExtract(urls, linkName, dir);
+                    client.TryDispose();
+                }
+                if (!File.Exists(file))
+                {
+                    XTrace.WriteLine("未找到 {0} {1}", disname, dll);
+                    return null;
+                }
+
+                //return Assembly.LoadFrom(file).GetType(typeName);
+
+                type = Type.GetType(typeName);
+                if (type != null) return type;
+
+                // 尝试直接加载DLL
+                if (File.Exists(file))
+                {
+                    try
+                    {
+                        var asm = Assembly.LoadFrom(file);
+                        type = asm.GetType(typeName);
+                        if (type != null) return type;
+                    }
+                    catch (Exception ex)
+                    {
+                        XTrace.WriteException(ex);
+                    }
+                }
+
                 return null;
             }
-
-            type = typeName.GetTypeEx(true);
-            if (type != null) return type;
-
-            //var assembly = Assembly.LoadFrom(file);
-            //if (assembly == null) return null;
-
-            //type = assembly.GetType(typeName);
-            //if (type == null) type = AssemblyX.Create(assembly).GetType(typeName);
-            return type;
         }
     }
 }

@@ -1,46 +1,121 @@
-﻿using System;
+﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
-using System.Net.Sockets;
+using System.Text;
+using NewLife.Net;
+using NewLife.Reflection;
+using NewLife.Security;
 
 namespace NewLife.Log
 {
     /// <summary>网络日志</summary>
     public class NetworkLog : Logger, IDisposable
     {
-        private Socket _Client;
-        /// <summary>网络套接字</summary>
-        public Socket Client { get { return _Client; } set { _Client = value; } }
+        /// <summary>服务端</summary>
+        public String Server { get; set; }
 
-        private IPEndPoint _Remote = new IPEndPoint(IPAddress.Broadcast, 514);
-        /// <summary>远程服务器地址</summary>
-        public IPEndPoint Remote { get { return _Remote; } set { _Remote = value; } }
+        /// <summary>应用标识</summary>
+        public String AppId { get; set; }
+
+        /// <summary>客户端标识</summary>
+        public String ClientId { get; set; }
+
+        private ISocketRemote _client;
+        //private HttpClient _http;
+        private readonly ConcurrentQueue<String> _Logs = new();
+        private volatile Int32 _logCount;
+        private Int32 _writing;
+
+        /// <summary>实例化网络日志。默认广播到514端口</summary>
+        public NetworkLog() => Server = new NetUri(NetType.Udp, IPAddress.Broadcast, 514) + "";
+
+        /// <summary>指定日志服务器地址来实例化网络日志</summary>
+        /// <param name="server"></param>
+        public NetworkLog(String server) => Server = server;
 
         /// <summary>销毁</summary>
         public void Dispose()
         {
-            if (Client != null) Client.Close();
+            // 销毁前把队列日志输出
+            if (_logCount > 0)
+            {
+                if (Interlocked.CompareExchange(ref _writing, 1, 0) == 0)
+                    PushLog();
+                else
+                    Thread.Sleep(500);
+            }
+
+            _client.TryDispose();
+            //_http.TryDispose();
+        }
+
+        private void Send(String value)
+        {
+            if (_client != null)
+                _client.Send(value);
+            //else if (_http != null)
+            //    _http.PostAsync("", new StringContent(value)).Wait();
         }
 
         private Boolean _inited;
-        void Init()
+        private void Init()
         {
             if (_inited) return;
 
-            // 默认Udp广播
-            var client = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            client.EnableBroadcast = true;
-            Client = client;
-
-            try
+            //var sys = SysConfig.Current;
+            if (AppId.IsNullOrEmpty()) AppId = AssemblyX.Entry.Name;
+            if (ClientId.IsNullOrEmpty())
             {
-                // 首先发送日志头
-                client.SendTo(GetHead().GetBytes(), Remote);
-
-                // 尝试向日志服务器表名身份
-                var buf = "{0} {1}/{2} 准备上报日志".F(DateTime.Now.ToFullString(), Environment.UserName, Environment.MachineName).GetBytes();
-                client.SendTo(buf, Remote);
+                try
+                {
+                    ClientId = NetHelper.MyIP() + "@" + Process.GetCurrentProcess().Id;
+                }
+                catch
+                {
+                    ClientId = Rand.NextString(8);
+                }
             }
-            catch (Exception ex) { client.SendTo(("读取环境变量错误=>" + ex.Message).GetBytes(), Remote); }
+
+            var uri = new NetUri(Server);
+            switch (uri.Type)
+            {
+                case NetType.Unknown:
+                    break;
+                case NetType.Tcp:
+                case NetType.Udp:
+                    _client = uri.CreateRemote();
+                    break;
+//                case NetType.Http:
+//                case NetType.Https:
+//                case NetType.WebSocket:
+//                    var handler = new HttpClientHandler { UseProxy = false };
+//                    if (Net.Setting.Current.EnableHttpCompression)
+//                    {
+//#if NETCOREAPP3_0_OR_GREATER
+//                        if (handler.SupportsAutomaticDecompression) handler.AutomaticDecompression = DecompressionMethods.All;
+//#else
+//                        if (handler.SupportsAutomaticDecompression) handler.AutomaticDecompression = DecompressionMethods.GZip;
+//#endif
+//                    }
+//                    var http = new HttpClient(handler)
+//                    {
+//                        BaseAddress = new Uri(Server)
+//                    };
+//                    http.DefaultRequestHeaders.Add("X-AppId", AppId);
+//                    http.DefaultRequestHeaders.Add("X-ClientId", ClientId);
+
+//                    // 默认UserAgent
+//                    http.SetUserAgent();
+
+//                    _http = http;
+//                    break;
+                default:
+                    break;
+            }
+            if (_client == null /*&& _http == null*/) return;
+
+            // 首先发送日志头
+            Send(GetHead());
 
             _inited = true;
         }
@@ -51,23 +126,61 @@ namespace NewLife.Log
         /// <param name="args"></param>
         protected override void OnWrite(LogLevel level, String format, params Object[] args)
         {
+            if (_logCount > 100) return;
+
+            var e = WriteLogEventArgs.Current.Set(level);
+            // 特殊处理异常对象
+            if (args != null && args.Length == 1 && args[0] is Exception ex && (format.IsNullOrEmpty() || format == "{0}"))
+                e = e.Set(null, ex);
+            else
+                e = e.Set(Format(format, args), null);
+
+            // 推入队列
+            _Logs.Enqueue(e.ToString());
+            Interlocked.Increment(ref _logCount);
+
+            // 异步写日志，实时。即使这里错误，定时器那边仍然会补上
+            if (Interlocked.CompareExchange(ref _writing, 1, 0) == 0)
+            {
+                ThreadPool.UnsafeQueueUserWorkItem(s =>
+                {
+                    try
+                    {
+                        PushLog();
+                    }
+                    catch { }
+                    finally
+                    {
+                        _writing = 0;
+                    }
+                }, null);
+            }
+        }
+
+        private void PushLog()
+        {
             Init();
 
-            var e = WriteLogEventArgs.Current.Set(level).Set(Format(format, args), null, true);
-            var buf = e.ToString().GetBytes();
-            if (Client.ProtocolType == ProtocolType.Udp)
+            // Tcp/Udp 和 Http 推送日志时需要不同的包大小
+            var max = /*_http != null ? 8192 :*/ 1460;
+
+            var sb = new StringBuilder();
+            while (_Logs.TryDequeue(out var msg))
             {
-                // 捕获异常，不能因为写日志异常导致上层出错
-                try
+                Interlocked.Decrement(ref _logCount);
+
+                if (sb.Length > 0 && sb.Length + msg.Length >= max)
                 {
-                    Client.SendTo(buf, Remote);
+                    Send(sb.ToString());
+                    //sb.Clear();
+                    sb.Length = 0;
                 }
-                catch
-                {
-                    // 出错后重新初始化
-                    _inited = false;
-                }
+
+                if (sb.Length > 0) sb.AppendLine();
+                sb.Append(msg);
             }
+
+            if (sb.Length > 0) Send(sb.ToString());
         }
     }
 }
