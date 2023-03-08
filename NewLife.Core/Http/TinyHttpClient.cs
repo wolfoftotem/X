@@ -26,20 +26,8 @@ public class TinyHttpClient : DisposeBase, IApiClient
     /// <summary>基础地址</summary>
     public Uri BaseAddress { get; set; }
 
-    ///// <summary>内容类型</summary>
-    //public String ContentType { get; set; }
-
-    ///// <summary>内容长度</summary>
-    //public Int32 ContentLength { get; private set; }
-
     /// <summary>保持连接</summary>
     public Boolean KeepAlive { get; set; }
-
-    ///// <summary>状态码</summary>
-    //public Int32 StatusCode { get; set; }
-
-    ///// <summary>状态描述</summary>
-    //public String StatusDescription { get; set; }
 
     /// <summary>超时时间。默认15s</summary>
     public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(15);
@@ -52,9 +40,6 @@ public class TinyHttpClient : DisposeBase, IApiClient
 
     /// <summary>性能跟踪器</summary>
     public ITracer Tracer { get; set; } = DefaultTracer.Instance;
-
-    ///// <summary>头部集合</summary>
-    //public IDictionary<String, String> Headers { get; set; } = new Dictionary<String, String>(StringComparer.OrdinalIgnoreCase);
 
     private Stream _stream;
     #endregion
@@ -607,7 +592,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
         {
             lock (this)
             {
-                if (_Cache == null) _Cache = new ConcurrentDictionary<String, IPool<TinyHttpClient>>();
+                _Cache ??= new ConcurrentDictionary<String, IPool<TinyHttpClient>>();
             }
         }
         return _Cache.GetOrAdd(host, k => new NewLife.Collections.ObjectPool<TinyHttpClient>
