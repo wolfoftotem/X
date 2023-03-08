@@ -128,7 +128,7 @@ namespace NewLife.Reflection
 
             // pe32 = 0x10b     pe64 = 0x20b
             // Magic				2
-            bool pe64 = reader.ReadUInt16() == 0x20b;
+            var pe64 = reader.ReadUInt16() == 0x20b;
 
             //						pe32 || pe64
 
@@ -230,7 +230,7 @@ namespace NewLife.Reflection
             var stream = reader.BaseStream;
             var sections = new Section[count];
 
-            for (int i = 0; i < count; i++)
+            for (var i = 0; i < count; i++)
             {
                 var section = new Section();
 
@@ -353,8 +353,8 @@ namespace NewLife.Reflection
 
             public DataDirectory(RVA rva, uint size)
             {
-                this.VirtualAddress = rva;
-                this.Size = size;
+                VirtualAddress = rva;
+                Size = size;
             }
 
             public DataDirectory(BinaryReader reader) : this(reader.ReadUInt32(), reader.ReadUInt32()) { }

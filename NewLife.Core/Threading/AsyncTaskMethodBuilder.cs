@@ -46,7 +46,7 @@ namespace System.Runtime.CompilerServices
 
         void IAsyncMethodBuilder.PreBoxInitialization()
         {
-            Task arg_06_0 = Task;
+            var arg_06_0 = Task;
         }
 
         /// <summary>指定的 awaiter 完成时，安排状态机，以继续下一操作。</summary>
@@ -163,7 +163,7 @@ namespace System.Runtime.CompilerServices
 
         void IAsyncMethodBuilder.PreBoxInitialization()
         {
-            Task<TResult> arg_06_0 = Task;
+            var arg_06_0 = Task;
         }
 
         /// <summary>指定的 awaiter 完成时，安排状态机，以继续下一操作。</summary>
@@ -175,7 +175,7 @@ namespace System.Runtime.CompilerServices
         {
             try
             {
-                Action completionAction = m_coreState.GetCompletionAction(ref this, ref stateMachine);
+                var completionAction = m_coreState.GetCompletionAction(ref this, ref stateMachine);
                 awaiter.OnCompleted(completionAction);
             }
             catch (Exception exception)
@@ -193,7 +193,7 @@ namespace System.Runtime.CompilerServices
         {
             try
             {
-                Action completionAction = m_coreState.GetCompletionAction(ref this, ref stateMachine);
+                var completionAction = m_coreState.GetCompletionAction(ref this, ref stateMachine);
                 awaiter.UnsafeOnCompleted(completionAction);
             }
             catch (Exception exception)

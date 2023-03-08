@@ -161,7 +161,7 @@ namespace NewLife.Web
             if (name.IsNullOrWhiteSpace()) return sb;
 
             // 必须注意，value可能是时间类型
-            return UrlParam(sb, "{0}={1}".F(name, value));
+            return UrlParam(sb, $"{name}={value}");
         }
 
         /// <summary>把一个参数字典追加Url参数，指定包含的参数</summary>

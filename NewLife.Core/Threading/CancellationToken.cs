@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 
 namespace System.Threading
 {
@@ -62,7 +62,7 @@ namespace System.Threading
 		{
 			if (Source.IsCancellationRequested)
 			{
-				throw new OperationCanceledException(this);
+				throw new OperationCanceledException();
 			}
 		}
 

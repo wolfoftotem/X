@@ -105,7 +105,7 @@ namespace System.Threading.Tasks
 		{
 			get
 			{
-				Delegate d = invoker.Action;
+				var d = invoker.Action;
 				if ((object)d != null)
 				{
 					return d.Method.ToString();
@@ -245,7 +245,7 @@ namespace System.Threading.Tasks
 				throw new InvalidOperationException("The task is not in a valid state to be started");
 			}
 			SetupScheduler(scheduler);
-			TaskStatus saveStatus = status;
+			var saveStatus = status;
 			Status = TaskStatus.WaitingToRun;
 			try
 			{
@@ -298,7 +298,7 @@ namespace System.Threading.Tasks
 
 		internal Task ContinueWith(TaskActionInvoker invoker, CancellationToken cancellationToken, TaskContinuationOptions continuationOptions, TaskScheduler scheduler)
 		{
-			Task continuation = new Task(invoker, null, cancellationToken, GetCreationOptions(continuationOptions), parent, this);
+			var continuation = new Task(invoker, null, cancellationToken, GetCreationOptions(continuationOptions), parent, this);
 			ContinueWithCore(continuation, continuationOptions, scheduler);
 			return continuation;
 		}
@@ -338,7 +338,7 @@ namespace System.Threading.Tasks
 
 		internal Task<TResult> ContinueWith<TResult>(TaskActionInvoker invoker, CancellationToken cancellationToken, TaskContinuationOptions continuationOptions, TaskScheduler scheduler)
 		{
-			Task<TResult> continuation = new Task<TResult>(invoker, null, cancellationToken, GetCreationOptions(continuationOptions), parent, this);
+			var continuation = new Task<TResult>(invoker, null, cancellationToken, GetCreationOptions(continuationOptions), parent, this);
 			ContinueWithCore(continuation, continuationOptions, scheduler);
 			return continuation;
 		}
@@ -375,7 +375,7 @@ namespace System.Threading.Tasks
 
 		internal static TaskCreationOptions GetCreationOptions(TaskContinuationOptions kind)
 		{
-			TaskCreationOptions options = TaskCreationOptions.None;
+			var options = TaskCreationOptions.None;
 			if ((kind & TaskContinuationOptions.AttachedToParent) > TaskContinuationOptions.None)
 			{
 				options |= TaskCreationOptions.AttachedToParent;
@@ -455,7 +455,7 @@ namespace System.Threading.Tasks
 			}
 			if (!executing.TryRelaxedSet())
 			{
-				SpinWait sw = default(SpinWait);
+				var sw = default(SpinWait);
 				while (!IsCompleted)
 				{
 					sw.SpinOnce();
@@ -474,7 +474,7 @@ namespace System.Threading.Tasks
 			}
 			if (!executing.TryRelaxedSet())
 			{
-				SpinWait sw = default(SpinWait);
+				var sw = default(SpinWait);
 				while (!IsCompleted)
 				{
 					sw.SpinOnce();
@@ -653,7 +653,7 @@ namespace System.Threading.Tasks
 			{
 				throw new ArgumentOutOfRangeException("millisecondsTimeout");
 			}
-			bool result = true;
+			var result = true;
 			if (!IsCompleted)
 			{
 				if (Status == TaskStatus.WaitingToRun && millisecondsTimeout == -1 && scheduler != null)
@@ -662,8 +662,8 @@ namespace System.Threading.Tasks
 				}
 				if (!IsCompleted)
 				{
-					ManualResetEventSlim evt = new ManualResetEventSlim();
-					ManualEventSlot slot = new ManualEventSlot(evt);
+					var evt = new ManualResetEventSlim();
+					var slot = new ManualEventSlot(evt);
 					try
 					{
 						ContinueWith(slot);
@@ -683,7 +683,7 @@ namespace System.Threading.Tasks
 			{
 				throw new AggregateException(new TaskCanceledException(this));
 			}
-			AggregateException exception = Exception;
+			var exception = Exception;
 			if (exception != null)
 			{
 				throw exception;
@@ -721,8 +721,8 @@ namespace System.Threading.Tasks
 			{
 				throw new ArgumentNullException("tasks");
 			}
-			bool result = true;
-			foreach (Task t in tasks)
+			var result = true;
+			foreach (var t in tasks)
 			{
 				if (t == null)
 				{
@@ -732,11 +732,11 @@ namespace System.Threading.Tasks
 			}
 			if (!result)
 			{
-				CountdownEvent evt = new CountdownEvent(tasks.Length);
-				CountdownEventSlot slot = new CountdownEventSlot(evt);
+				var evt = new CountdownEvent(tasks.Length);
+				var slot = new CountdownEventSlot(evt);
 				try
 				{
-					foreach (Task t3 in tasks)
+					foreach (var t3 in tasks)
 					{
 						t3.ContinueWith(slot);
 					}
@@ -745,7 +745,7 @@ namespace System.Threading.Tasks
 				finally
 				{
 					List<Exception> exceptions = null;
-					foreach (Task t2 in tasks)
+					foreach (var t2 in tasks)
 					{
 						if (result)
 						{
@@ -813,14 +813,14 @@ namespace System.Threading.Tasks
 			CheckForNullTasks(tasks);
 			if (tasks.Length > 0)
 			{
-				ManualResetEventSlim evt = new ManualResetEventSlim();
-				ManualEventSlot slot = new ManualEventSlot(evt);
-				bool result = false;
+				var evt = new ManualResetEventSlim();
+				var slot = new ManualEventSlot(evt);
+				var result = false;
 				try
 				{
-					for (int j = 0; j < tasks.Length; j++)
+					for (var j = 0; j < tasks.Length; j++)
 					{
-						Task t3 = tasks[j];
+						var t3 = tasks[j];
 						if (t3.IsCompleted)
 						{
 							return j;
@@ -836,7 +836,7 @@ namespace System.Threading.Tasks
 				{
 					if (!result)
 					{
-						foreach (Task t2 in tasks)
+						foreach (var t2 in tasks)
 						{
 							t2.RemoveContinuation(slot);
 						}
@@ -844,10 +844,10 @@ namespace System.Threading.Tasks
 					evt.Dispose();
 				}
 			}
-			int firstFinished = -1;
-			for (int i = 0; i < tasks.Length; i++)
+			var firstFinished = -1;
+			for (var i = 0; i < tasks.Length; i++)
 			{
-				Task t = tasks[i];
+				var t = tasks[i];
 				if (t.IsCompleted)
 				{
 					firstFinished = i;
@@ -871,7 +871,7 @@ namespace System.Threading.Tasks
 
 		private static void CheckForNullTasks(Task[] tasks)
 		{
-			foreach (Task t in tasks)
+			foreach (var t in tasks)
 			{
 				if (t == null)
 				{
@@ -932,7 +932,7 @@ namespace System.Threading.Tasks
 			{
 				throw new ArgumentNullException("scheduler");
 			}
-			Task continuation = new Task(TaskActionInvoker.Create(continuationAction), state, cancellationToken, GetCreationOptions(continuationOptions), parent, this);
+			var continuation = new Task(TaskActionInvoker.Create(continuationAction), state, cancellationToken, GetCreationOptions(continuationOptions), parent, this);
 			ContinueWithCore(continuation, continuationOptions, scheduler);
 			return continuation;
 		}
@@ -967,14 +967,14 @@ namespace System.Threading.Tasks
 			{
 				throw new ArgumentNullException("scheduler");
 			}
-			Task<TResult> t = new Task<TResult>(TaskActionInvoker.Create(continuationFunction), state, cancellationToken, GetCreationOptions(continuationOptions), parent, this);
+			var t = new Task<TResult>(TaskActionInvoker.Create(continuationFunction), state, cancellationToken, GetCreationOptions(continuationOptions), parent, this);
 			ContinueWithCore(t, continuationOptions, scheduler);
 			return t;
 		}
 
 		public static Task<TResult> FromResult<TResult>(TResult result)
 		{
-			TaskCompletionSource<TResult> tcs = new TaskCompletionSource<TResult>();
+			var tcs = new TaskCompletionSource<TResult>();
 			tcs.SetResult(result);
 			return tcs.Task;
 		}
@@ -990,7 +990,7 @@ namespace System.Threading.Tasks
 			{
 				return TaskConstants.Canceled;
 			}
-			Task t = new Task(action, cancellationToken, TaskCreationOptions.DenyChildAttach);
+			var t = new Task(action, cancellationToken, TaskCreationOptions.DenyChildAttach);
 			t.Start();
 			return t;
 		}
@@ -1006,7 +1006,7 @@ namespace System.Threading.Tasks
 			{
 				return TaskConstants.Canceled;
 			}
-			Task<Task> t = new Task<Task>(function, cancellationToken);
+			var t = new Task<Task>(function, cancellationToken);
 			t.Start();
 			return t;
 		}
@@ -1022,7 +1022,7 @@ namespace System.Threading.Tasks
 			{
 				return TaskConstants<TResult>.Canceled;
 			}
-			Task<TResult> t = new Task<TResult>(function, cancellationToken, TaskCreationOptions.DenyChildAttach);
+			var t = new Task<TResult>(function, cancellationToken, TaskCreationOptions.DenyChildAttach);
 			t.Start();
 			return t;
 		}
@@ -1155,7 +1155,7 @@ namespace System.Threading.Tasks
 			{
 				throw new ArgumentNullException("scheduler");
 			}
-			Task t = new Task(TaskActionInvoker.Create(continuationAction), null, cancellationToken, Task.GetCreationOptions(continuationOptions), parent, this);
+			var t = new Task(TaskActionInvoker.Create(continuationAction), null, cancellationToken, Task.GetCreationOptions(continuationOptions), parent, this);
 			ContinueWithCore(t, continuationOptions, scheduler);
 			return t;
 		}
@@ -1190,7 +1190,7 @@ namespace System.Threading.Tasks
 			{
 				throw new ArgumentNullException("scheduler");
 			}
-			Task<TNewResult> t = new Task<TNewResult>(TaskActionInvoker.Create(continuationFunction), null, cancellationToken, Task.GetCreationOptions(continuationOptions), parent, this);
+			var t = new Task<TNewResult>(TaskActionInvoker.Create(continuationFunction), null, cancellationToken, Task.GetCreationOptions(continuationOptions), parent, this);
 			ContinueWithCore(t, continuationOptions, scheduler);
 			return t;
 		}
@@ -1203,7 +1203,7 @@ namespace System.Threading.Tasks
 			}
 			if (!executing.TryRelaxedSet())
 			{
-				SpinWait sw = default(SpinWait);
+				var sw = default(SpinWait);
 				while (!base.IsCompleted)
 				{
 					sw.SpinOnce();
@@ -1247,7 +1247,7 @@ namespace System.Threading.Tasks
 			{
 				throw new ArgumentNullException("scheduler");
 			}
-			Task t = new Task(TaskActionInvoker.Create(continuationAction), state, cancellationToken, Task.GetCreationOptions(continuationOptions), parent, this);
+			var t = new Task(TaskActionInvoker.Create(continuationAction), state, cancellationToken, Task.GetCreationOptions(continuationOptions), parent, this);
 			ContinueWithCore(t, continuationOptions, scheduler);
 			return t;
 		}
@@ -1282,7 +1282,7 @@ namespace System.Threading.Tasks
 			{
 				throw new ArgumentNullException("scheduler");
 			}
-			Task<TNewResult> t = new Task<TNewResult>(TaskActionInvoker.Create(continuationFunction), state, cancellationToken, Task.GetCreationOptions(continuationOptions), parent, this);
+			var t = new Task<TNewResult>(TaskActionInvoker.Create(continuationFunction), state, cancellationToken, Task.GetCreationOptions(continuationOptions), parent, this);
 			ContinueWithCore(t, continuationOptions, scheduler);
 			return t;
 		}

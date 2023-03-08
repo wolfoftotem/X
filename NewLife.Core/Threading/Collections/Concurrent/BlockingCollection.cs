@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -12,22 +12,22 @@ namespace System.Collections.Concurrent
 		private readonly IProducerConsumerCollection<T> underlyingColl;
         private AtomicBoolean isComplete;
 
-		private long completeId;
+		private Int64 completeId;
 
-		private int addId = int.MinValue;
+		private Int32 addId = Int32.MinValue;
 
-		private int removeId = int.MinValue;
+		private Int32 removeId = Int32.MinValue;
 
 		[ThreadStatic]
 		private SpinWait sw;
 
-        public int BoundedCapacity { get; }
+        public Int32 BoundedCapacity { get; }
 
-        public int Count => underlyingColl.Count;
+        public Int32 Count => underlyingColl.Count;
 
-		public bool IsAddingCompleted => isComplete.Value;
+		public Boolean IsAddingCompleted => isComplete.Value;
 
-		public bool IsCompleted
+		public Boolean IsCompleted
 		{
 			get
 			{
@@ -39,16 +39,16 @@ namespace System.Collections.Concurrent
 			}
 		}
 
-		object ICollection.SyncRoot => underlyingColl.SyncRoot;
+        Object ICollection.SyncRoot => underlyingColl.SyncRoot;
 
-		bool ICollection.IsSynchronized => underlyingColl.IsSynchronized;
+        Boolean ICollection.IsSynchronized => underlyingColl.IsSynchronized;
 
 		public BlockingCollection()
 			: this((IProducerConsumerCollection<T>)new ConcurrentQueue<T>(), -1)
 		{
 		}
 
-		public BlockingCollection(int upperBound)
+		public BlockingCollection(Int32 upperBound)
 			: this((IProducerConsumerCollection<T>)new ConcurrentQueue<T>(), upperBound)
 		{
 		}
@@ -58,7 +58,7 @@ namespace System.Collections.Concurrent
 		{
 		}
 
-		public BlockingCollection(IProducerConsumerCollection<T> underlyingColl, int upperBound)
+		public BlockingCollection(IProducerConsumerCollection<T> underlyingColl, Int32 upperBound)
 		{
 			this.underlyingColl = underlyingColl;
 			this.BoundedCapacity = upperBound;
@@ -75,12 +75,12 @@ namespace System.Collections.Concurrent
 			Add(item, () => token.IsCancellationRequested);
 		}
 
-		private void Add(T item, Func<bool> cancellationFunc)
+		private void Add(T item, Func<Boolean> cancellationFunc)
 		{
 			while (true)
 			{
-				int cachedAddId = addId;
-				int cachedRemoveId = removeId;
+				var cachedAddId = addId;
+				var cachedRemoveId = removeId;
 				if (BoundedCapacity != -1 && cachedAddId - cachedRemoveId > BoundedCapacity)
 				{
 					Block();
@@ -115,12 +115,12 @@ namespace System.Collections.Concurrent
 			return Take(() => token.IsCancellationRequested);
 		}
 
-		private T Take(Func<bool> cancellationFunc)
+		private T Take(Func<Boolean> cancellationFunc)
 		{
 			while (true)
 			{
-				int cachedRemoveId = removeId;
-				int cachedAddId = addId;
+				var cachedRemoveId = removeId;
+				var cachedAddId = addId;
 				if (cachedRemoveId == cachedAddId)
 				{
 					if (IsCompleted)
@@ -147,12 +147,12 @@ namespace System.Collections.Concurrent
 			return item;
 		}
 
-		public bool TryAdd(T item)
+		public Boolean TryAdd(T item)
 		{
 			return TryAdd(item, null, null);
 		}
 
-		private bool TryAdd(T item, Func<bool> contFunc, CancellationToken? token)
+		private Boolean TryAdd(T item, Func<Boolean> contFunc, CancellationToken? token)
 		{
 			do
 			{
@@ -160,8 +160,8 @@ namespace System.Collections.Concurrent
 				{
 					throw new OperationCanceledException("The CancellationToken has had cancellation requested.");
 				}
-				int cachedAddId = addId;
-				int cachedRemoveId = removeId;
+				var cachedAddId = addId;
+				var cachedRemoveId = removeId;
 				if (BoundedCapacity != -1 && cachedAddId - cachedRemoveId > BoundedCapacity)
 				{
 					continue;
@@ -183,29 +183,29 @@ namespace System.Collections.Concurrent
 			return false;
 		}
 
-		public bool TryAdd(T item, TimeSpan ts)
+		public Boolean TryAdd(T item, TimeSpan ts)
 		{
-			return TryAdd(item, (int)ts.TotalMilliseconds);
+			return TryAdd(item, (Int32)ts.TotalMilliseconds);
 		}
 
-		public bool TryAdd(T item, int millisecondsTimeout)
+		public Boolean TryAdd(T item, Int32 millisecondsTimeout)
 		{
-			Watch stopwatch = Watch.StartNew();
+			var stopwatch = Watch.StartNew();
 			return TryAdd(item, () => stopwatch.ElapsedMilliseconds < millisecondsTimeout, null);
 		}
 
-		public bool TryAdd(T item, int millisecondsTimeout, CancellationToken token)
+		public Boolean TryAdd(T item, Int32 millisecondsTimeout, CancellationToken token)
 		{
-			Watch stopwatch = Watch.StartNew();
+			var stopwatch = Watch.StartNew();
 			return TryAdd(item, () => stopwatch.ElapsedMilliseconds < millisecondsTimeout, token);
 		}
 
-		public bool TryTake(out T item)
+		public Boolean TryTake(out T item)
 		{
 			return TryTake(out item, null, null);
 		}
 
-		private bool TryTake(out T item, Func<bool> contFunc, CancellationToken? token)
+		private Boolean TryTake(out T item, Func<Boolean> contFunc, CancellationToken? token)
 		{
 			item = default(T);
 			do
@@ -214,8 +214,8 @@ namespace System.Collections.Concurrent
 				{
 					throw new OperationCanceledException("The CancellationToken has had cancellation requested.");
 				}
-				int cachedRemoveId = removeId;
-				int cachedAddId = addId;
+				var cachedRemoveId = removeId;
+				var cachedAddId = addId;
 				if (cachedRemoveId == cachedAddId)
 				{
 					if (IsCompleted)
@@ -232,22 +232,22 @@ namespace System.Collections.Concurrent
 			return false;
 		}
 
-		public bool TryTake(out T item, TimeSpan ts)
+		public Boolean TryTake(out T item, TimeSpan ts)
 		{
-			return TryTake(out item, (int)ts.TotalMilliseconds);
+			return TryTake(out item, (Int32)ts.TotalMilliseconds);
 		}
 
-		public bool TryTake(out T item, int millisecondsTimeout)
+		public Boolean TryTake(out T item, Int32 millisecondsTimeout)
 		{
 			item = default(T);
-			Watch sw = Watch.StartNew();
+			var sw = Watch.StartNew();
 			return TryTake(out item, () => sw.ElapsedMilliseconds < millisecondsTimeout, null);
 		}
 
-		public bool TryTake(out T item, int millisecondsTimeout, CancellationToken token)
+		public Boolean TryTake(out T item, Int32 millisecondsTimeout, CancellationToken token)
 		{
 			item = default(T);
-			Watch sw = Watch.StartNew();
+			var sw = Watch.StartNew();
 			return TryTake(out item, () => sw.ElapsedMilliseconds < millisecondsTimeout, token);
 		}
 
@@ -263,9 +263,9 @@ namespace System.Collections.Concurrent
 			}
 		}
 
-		private static bool IsThereANullElement(BlockingCollection<T>[] collections)
+		private static Boolean IsThereANullElement(BlockingCollection<T>[] collections)
 		{
-			foreach (BlockingCollection<T> e in collections)
+			foreach (var e in collections)
 			{
 				if (e == null)
 				{
@@ -275,11 +275,11 @@ namespace System.Collections.Concurrent
 			return false;
 		}
 
-		public static int AddToAny(BlockingCollection<T>[] collections, T item)
+		public static Int32 AddToAny(BlockingCollection<T>[] collections, T item)
 		{
 			CheckArray(collections);
-			int index = 0;
-			foreach (BlockingCollection<T> coll in collections)
+			var index = 0;
+			foreach (var coll in collections)
 			{
 				try
 				{
@@ -294,11 +294,11 @@ namespace System.Collections.Concurrent
 			return -1;
 		}
 
-		public static int AddToAny(BlockingCollection<T>[] collections, T item, CancellationToken token)
+		public static Int32 AddToAny(BlockingCollection<T>[] collections, T item, CancellationToken token)
 		{
 			CheckArray(collections);
-			int index = 0;
-			foreach (BlockingCollection<T> coll in collections)
+			var index = 0;
+			foreach (var coll in collections)
 			{
 				try
 				{
@@ -313,11 +313,11 @@ namespace System.Collections.Concurrent
 			return -1;
 		}
 
-		public static int TryAddToAny(BlockingCollection<T>[] collections, T item)
+		public static Int32 TryAddToAny(BlockingCollection<T>[] collections, T item)
 		{
 			CheckArray(collections);
-			int index = 0;
-			foreach (BlockingCollection<T> coll in collections)
+			var index = 0;
+			foreach (var coll in collections)
 			{
 				if (coll.TryAdd(item))
 				{
@@ -328,11 +328,11 @@ namespace System.Collections.Concurrent
 			return -1;
 		}
 
-		public static int TryAddToAny(BlockingCollection<T>[] collections, T item, TimeSpan ts)
+		public static Int32 TryAddToAny(BlockingCollection<T>[] collections, T item, TimeSpan ts)
 		{
 			CheckArray(collections);
-			int index = 0;
-			foreach (BlockingCollection<T> coll in collections)
+			var index = 0;
+			foreach (var coll in collections)
 			{
 				if (coll.TryAdd(item, ts))
 				{
@@ -343,11 +343,11 @@ namespace System.Collections.Concurrent
 			return -1;
 		}
 
-		public static int TryAddToAny(BlockingCollection<T>[] collections, T item, int millisecondsTimeout)
+		public static Int32 TryAddToAny(BlockingCollection<T>[] collections, T item, Int32 millisecondsTimeout)
 		{
 			CheckArray(collections);
-			int index = 0;
-			foreach (BlockingCollection<T> coll in collections)
+			var index = 0;
+			foreach (var coll in collections)
 			{
 				if (coll.TryAdd(item, millisecondsTimeout))
 				{
@@ -358,11 +358,11 @@ namespace System.Collections.Concurrent
 			return -1;
 		}
 
-		public static int TryAddToAny(BlockingCollection<T>[] collections, T item, int millisecondsTimeout, CancellationToken token)
+		public static Int32 TryAddToAny(BlockingCollection<T>[] collections, T item, Int32 millisecondsTimeout, CancellationToken token)
 		{
 			CheckArray(collections);
-			int index = 0;
-			foreach (BlockingCollection<T> coll in collections)
+			var index = 0;
+			foreach (var coll in collections)
 			{
 				if (coll.TryAdd(item, millisecondsTimeout, token))
 				{
@@ -373,12 +373,12 @@ namespace System.Collections.Concurrent
 			return -1;
 		}
 
-		public static int TakeFromAny(BlockingCollection<T>[] collections, out T item)
+		public static Int32 TakeFromAny(BlockingCollection<T>[] collections, out T item)
 		{
 			item = default(T);
 			CheckArray(collections);
-			int index = 0;
-			foreach (BlockingCollection<T> coll in collections)
+			var index = 0;
+			foreach (var coll in collections)
 			{
 				try
 				{
@@ -393,12 +393,12 @@ namespace System.Collections.Concurrent
 			return -1;
 		}
 
-		public static int TakeFromAny(BlockingCollection<T>[] collections, out T item, CancellationToken token)
+		public static Int32 TakeFromAny(BlockingCollection<T>[] collections, out T item, CancellationToken token)
 		{
 			item = default(T);
 			CheckArray(collections);
-			int index = 0;
-			foreach (BlockingCollection<T> coll in collections)
+			var index = 0;
+			foreach (var coll in collections)
 			{
 				try
 				{
@@ -413,12 +413,12 @@ namespace System.Collections.Concurrent
 			return -1;
 		}
 
-		public static int TryTakeFromAny(BlockingCollection<T>[] collections, out T item)
+		public static Int32 TryTakeFromAny(BlockingCollection<T>[] collections, out T item)
 		{
 			item = default(T);
 			CheckArray(collections);
-			int index = 0;
-			foreach (BlockingCollection<T> coll in collections)
+			var index = 0;
+			foreach (var coll in collections)
 			{
 				if (coll.TryTake(out item))
 				{
@@ -429,12 +429,12 @@ namespace System.Collections.Concurrent
 			return -1;
 		}
 
-		public static int TryTakeFromAny(BlockingCollection<T>[] collections, out T item, TimeSpan ts)
+		public static Int32 TryTakeFromAny(BlockingCollection<T>[] collections, out T item, TimeSpan ts)
 		{
 			item = default(T);
 			CheckArray(collections);
-			int index = 0;
-			foreach (BlockingCollection<T> coll in collections)
+			var index = 0;
+			foreach (var coll in collections)
 			{
 				if (coll.TryTake(out item, ts))
 				{
@@ -445,12 +445,12 @@ namespace System.Collections.Concurrent
 			return -1;
 		}
 
-		public static int TryTakeFromAny(BlockingCollection<T>[] collections, out T item, int millisecondsTimeout)
+		public static Int32 TryTakeFromAny(BlockingCollection<T>[] collections, out T item, Int32 millisecondsTimeout)
 		{
 			item = default(T);
 			CheckArray(collections);
-			int index = 0;
-			foreach (BlockingCollection<T> coll in collections)
+			var index = 0;
+			foreach (var coll in collections)
 			{
 				if (coll.TryTake(out item, millisecondsTimeout))
 				{
@@ -461,12 +461,12 @@ namespace System.Collections.Concurrent
 			return -1;
 		}
 
-		public static int TryTakeFromAny(BlockingCollection<T>[] collections, out T item, int millisecondsTimeout, CancellationToken token)
+		public static Int32 TryTakeFromAny(BlockingCollection<T>[] collections, out T item, Int32 millisecondsTimeout, CancellationToken token)
 		{
 			item = default(T);
 			CheckArray(collections);
-			int index = 0;
-			foreach (BlockingCollection<T> coll in collections)
+			var index = 0;
+			foreach (var coll in collections)
 			{
 				if (coll.TryTake(out item, millisecondsTimeout, token))
 				{
@@ -483,12 +483,12 @@ namespace System.Collections.Concurrent
 			isComplete.Value = true;
 		}
 
-		void ICollection.CopyTo(Array array, int index)
+		void ICollection.CopyTo(Array array, Int32 index)
 		{
 			underlyingColl.CopyTo(array, index);
 		}
 
-		public void CopyTo(T[] array, int index)
+		public void CopyTo(T[] array, Int32 index)
 		{
 			underlyingColl.CopyTo(array, index);
 		}
@@ -534,7 +534,7 @@ namespace System.Collections.Concurrent
 		{
 		}
 
-		protected virtual void Dispose(bool managedRes)
+		protected virtual void Dispose(Boolean managedRes)
 		{
 		}
 

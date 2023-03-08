@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace System.Threading
 {
@@ -52,7 +52,7 @@ namespace System.Threading
 			CanceledSource.IsCancellationRequested = true;
 			timer_callback = delegate(object token)
 			{
-				CancellationTokenSource cancellationTokenSource = (CancellationTokenSource)token;
+				var cancellationTokenSource = (CancellationTokenSource)token;
 				cancellationTokenSource.Cancel();
 			};
 		}
@@ -96,7 +96,7 @@ namespace System.Threading
 			{
 				try
 				{
-					foreach (KeyValuePair<CancellationTokenRegistration, Action> item in callbacks)
+					foreach (var item in callbacks)
 					{
 						if (throwOnFirstException)
 						{
@@ -148,7 +148,7 @@ namespace System.Threading
 			}
 			if (timer == null)
 			{
-				Timer t = new Timer(timer_callback, this, -1, -1);
+				var t = new Timer(timer_callback, this, -1, -1);
 				if (Interlocked.CompareExchange(ref timer, t, null) != null)
 				{
 					t.Dispose();
@@ -172,11 +172,11 @@ namespace System.Threading
 			{
 				throw new ArgumentException("Empty tokens array");
 			}
-			CancellationTokenSource src = new CancellationTokenSource();
+			var src = new CancellationTokenSource();
 			Action action = src.Cancel;
-			for (int i = 0; i < tokens.Length; i++)
+			for (var i = 0; i < tokens.Length; i++)
 			{
-				CancellationToken token = tokens[i];
+				var token = tokens[i];
 				if (token.CanBeCanceled)
 				{
 					token.Register(action);
@@ -228,14 +228,14 @@ namespace System.Threading
 		internal CancellationTokenRegistration Register(Action callback, bool useSynchronizationContext)
 		{
 			CheckDisposed();
-			CancellationTokenRegistration tokenReg = new CancellationTokenRegistration(Interlocked.Increment(ref currId), this);
+			var tokenReg = new CancellationTokenRegistration(Interlocked.Increment(ref currId), this);
 			if (IsCancellationRequested)
 			{
 				callback();
 			}
 			else
 			{
-				bool temp = false;
+				var temp = false;
 				lock (syncRoot)
 				{
 					if (!(temp = IsCancellationRequested))
@@ -264,7 +264,7 @@ namespace System.Threading
 					}
 				}
 			}
-			SpinWait sw = default(SpinWait);
+			var sw = default(SpinWait);
 			while (!processed)
 			{
 				sw.SpinOnce();
