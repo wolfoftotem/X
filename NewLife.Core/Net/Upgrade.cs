@@ -159,8 +159,8 @@ public class Upgrade
 
         var tmp = Path.GetTempPath().CombinePath(Path.GetFileNameWithoutExtension(file));
         WriteLog("解压缩更新包到临时目录 {0}", tmp);
-        //file.AsFile().Extract(tmp, true);
-        throw new NotImplementedException("Extract");
+        file.AsFile().Extract(tmp, true);
+        //throw new NotImplementedException("Extract");
 
         // 拷贝替换更新
         CopyAndReplace(tmp, DestinationPath);
@@ -252,8 +252,8 @@ public class Upgrade
 
         var source = Path.GetTempPath().CombinePath(Path.GetFileNameWithoutExtension(fileName));
         WriteLog("解压缩更新包到临时目录 {0}", source);
-        //fileName.AsFile().Extract(source, true);
-        throw new NotImplementedException("Extract");
+        fileName.AsFile().Extract(source, true);
+        //throw new NotImplementedException("Extract");
 
         //var source = fileName.TrimEnd(".zip");
         //if (Directory.Exists(source)) Directory.Delete(source, true);

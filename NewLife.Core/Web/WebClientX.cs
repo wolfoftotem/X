@@ -303,7 +303,7 @@ public class WebClientX : WebClient
             var fi = CheckCache(name, destdir);
 
             Log.Info("解压缩到 {0}", destdir);
-            //file.AsFile().Extract(destdir, overwrite);
+            file.AsFile().Extract(destdir, overwrite);
 
             // 删除zip
             File.Delete(file);
