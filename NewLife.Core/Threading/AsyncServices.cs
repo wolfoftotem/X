@@ -45,8 +45,9 @@ namespace System.Runtime.CompilerServices
                 }
             }
             ThreadPool.QueueUserWorkItem(state => throw PrepareExceptionForRethrow((Exception)state), exception);
+            //throw new Exception("error", exception);
         }
 
-        internal static Exception PrepareExceptionForRethrow(Exception exc) => exc;
+        internal static Exception PrepareExceptionForRethrow(Exception exc) => new AggregateException(exc);
     }
 }
