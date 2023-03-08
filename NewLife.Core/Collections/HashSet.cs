@@ -93,13 +93,8 @@ namespace System.Collections.Generic
             get { return _dic.Count; }
         }
 
-        private bool _IsReadOnly;
         /// <summary>获取一个值，该值指示集合是否为只读。</summary>
-        public bool IsReadOnly
-        {
-            get { return _IsReadOnly; }
-            set { _IsReadOnly = value; }
-        }
+        public bool IsReadOnly { get; set; }
         #endregion
 
         #region IEnumerable<T> 成员

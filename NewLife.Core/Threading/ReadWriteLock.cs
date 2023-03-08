@@ -19,20 +19,17 @@ namespace NewLife.Threading
     public sealed class ReadWriteLock //: DisposeBase
     {
         #region 属性
-        private Int32 _Max = 1;
         /// <summary>最大可独占资源数，默认1</summary>
-        public Int32 Max { get { return _Max; } set { _Max = value; } }
+        public Int32 Max { get; set; } = 1;
 
         /// <summary>锁计数</summary>
         private Int32 _lock = 0;
 
-        private Int32 _ReadTimeout = 1000;
         /// <summary>读取锁等待超时时间，默认1秒</summary>
-        public Int32 ReadTimeout { get { return _ReadTimeout; } set { _ReadTimeout = value; } }
+        public Int32 ReadTimeout { get; set; } = 1000;
 
-        private Int32 _WriteTimeout = 5000;
         /// <summary>写入锁等待超时时间，默认5秒</summary>
-        public Int32 WriteTimeout { get { return _WriteTimeout; } set { _WriteTimeout = value; } }
+        public Int32 WriteTimeout { get; set; } = 5000;
 
         ///// <summary>
         ///// 写入线程的ID。用于多次调用识别

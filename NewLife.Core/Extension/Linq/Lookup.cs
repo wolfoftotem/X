@@ -121,17 +121,12 @@ namespace System.Linq
         private IEqualityComparer<TKey> comparer;
         private Lookup<TKey, TElement>.Grouping[] groupings;
         private Lookup<TKey, TElement>.Grouping lastGrouping;
-        private int count;
+
         /// <summary>获取 <see cref="T:System.Linq.Lookup`2" /> 中的键/值对集合的数目。</summary>
         /// <returns>
         ///   <see cref="T:System.Linq.Lookup`2" /> 中键/值对集合的数目。</returns>
-        public int Count
-        {
-            [TargetedPatchingOptOut("Performance critical to inline this type of method across NGen image boundaries")]
-            get
-            {
-                return this.count;
-            }
+        public int Count { [TargetedPatchingOptOut("Performance critical to inline this type of method across NGen image boundaries")]
+            get; private set;
         }
         /// <summary>获取按指定键进行索引的值的集合。</summary>
         /// <returns>按指定键进行索引的值的集合。</returns>
@@ -264,7 +259,7 @@ namespace System.Linq
             }
             if (create)
             {
-                if (this.count == this.groupings.Length)
+                if (this.Count == this.groupings.Length)
                 {
                     this.Resize();
                 }
@@ -285,14 +280,14 @@ namespace System.Linq
                     this.lastGrouping.next = grouping2;
                 }
                 this.lastGrouping = grouping2;
-                this.count++;
+                this.Count++;
                 return grouping2;
             }
             return null;
         }
         private void Resize()
         {
-            int num = checked(this.count * 2 + 1);
+            int num = checked(this.Count * 2 + 1);
             Lookup<TKey, TElement>.Grouping[] array = new Lookup<TKey, TElement>.Grouping[num];
             Lookup<TKey, TElement>.Grouping next = this.lastGrouping;
             do

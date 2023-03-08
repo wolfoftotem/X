@@ -13,11 +13,10 @@ namespace NewLife.Collections
     {
         #region 构造
         private readonly BitArray container = null;
-        private readonly Int32 _M;
         private readonly Int32 _K;
 
         /// <summary>位数组大小</summary>
-        public Int32 Length => _M;
+        public Int32 Length { get; }
 
         /// <summary>K值，循环哈希次数</summary>
         public Int32 K => _K;
@@ -27,7 +26,7 @@ namespace NewLife.Collections
         public BloomFilter(Int32 length)
         {
             container = new BitArray(length);
-            _M = length;
+            Length = length;
             _K = 4;
         }
 
@@ -39,10 +38,10 @@ namespace NewLife.Collections
             if (fpp is <= 0 or >= 1) fpp = 0.0001;
 
             // 根据Guava算法计算位数组大小
-            _M = (Int32)(-n * Math.Log(fpp) / (Math.Log(2) * Math.Log(2)));
-            _K = Math.Max(1, (Int32)Math.Round(_M / n * Math.Log(2)));
+            Length = (Int32)(-n * Math.Log(fpp) / (Math.Log(2) * Math.Log(2)));
+            _K = Math.Max(1, (Int32)Math.Round(Length / n * Math.Log(2)));
 
-            container = new BitArray(_M);
+            container = new BitArray(Length);
         }
 
         /// <summary>初始化布隆过滤器</summary>
@@ -50,7 +49,7 @@ namespace NewLife.Collections
         public BloomFilter(Byte[] values)
         {
             container = new BitArray(values);
-            _M = container.Length;
+            Length = container.Length;
         }
         #endregion
 
@@ -67,7 +66,7 @@ namespace NewLife.Collections
             var h = hash1;
             for (var i = 0; i < _K; i++)
             {
-                container[(Int32)((Int64)(h & Int64.MaxValue) % _M)] = true;
+                container[(Int32)((Int64)(h & Int64.MaxValue) % Length)] = true;
                 h += hash2;
             }
         }
@@ -85,7 +84,7 @@ namespace NewLife.Collections
             var h = hash1;
             for (var i = 0; i < _K; i++)
             {
-                if (!container[(Int32)((Int64)(h & Int64.MaxValue) % _M)]) return false;
+                if (!container[(Int32)((Int64)(h & Int64.MaxValue) % Length)]) return false;
                 h += hash2;
             }
 

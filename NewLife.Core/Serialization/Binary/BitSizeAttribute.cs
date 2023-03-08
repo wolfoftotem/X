@@ -9,9 +9,8 @@ namespace NewLife.Serialization
     [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
     public class BitSizeAttribute : Attribute
     {
-        private Int32 _Size;
         /// <summary>大小</summary>
-        public Int32 Size { get { return _Size; } set { _Size = value; } }
+        public Int32 Size { get; set; }
 
         /// <summary>通过Offset指定字段的偏移位置</summary>
         /// <param name="size"></param>

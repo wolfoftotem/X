@@ -6,13 +6,11 @@ namespace NewLife.Xml
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
     public class XmlConfigFileAttribute : Attribute
     {
-        private String _FileName;
         /// <summary>配置文件名</summary>
-        public String FileName { get { return _FileName; } set { _FileName = value; } }
+        public String FileName { get; set; }
 
-        private Int32 _ReloadTime;
         /// <summary>重新加载时间。单位：毫秒</summary>
-        public Int32 ReloadTime { get { return _ReloadTime; } set { _ReloadTime = value; } }
+        public Int32 ReloadTime { get; set; }
 
         /// <summary>指定配置文件名</summary>
         /// <param name="fileName"></param>

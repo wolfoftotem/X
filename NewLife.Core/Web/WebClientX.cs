@@ -31,25 +31,20 @@ public class WebClientX : WebClient
     #endregion
 
     #region 属性
-    private String _Accept;
     /// <summary>可接受类型</summary>
-    public String Accept { get { return _Accept; } set { _Accept = value; } }
+    public String Accept { get; set; }
 
-    private String _AcceptLanguage;
     /// <summary>可接受语言</summary>
-    public String AcceptLanguage { get { return _AcceptLanguage; } set { _AcceptLanguage = value; } }
+    public String AcceptLanguage { get; set; }
 
-    private String _Referer;
     /// <summary>引用页面</summary>
-    public String Referer { get { return _Referer; } set { _Referer = value; } }
+    public String Referer { get; set; }
 
-    private DecompressionMethods _AutomaticDecompression;
     /// <summary>自动解压缩模式。</summary>
-    public DecompressionMethods AutomaticDecompression { get { return _AutomaticDecompression; } set { _AutomaticDecompression = value; } }
+    public DecompressionMethods AutomaticDecompression { get; set; }
 
-    private String _UserAgent;
     /// <summary>User-Agent 标头，指定有关客户端代理的信息</summary>
-    public String UserAgent { get { return _UserAgent; } set { _UserAgent = value; } }
+    public String UserAgent { get; set; }
 
     /// <summary>超时，默认15000毫秒</summary>
     public Int32 Timeout { get; set; } = 15000;

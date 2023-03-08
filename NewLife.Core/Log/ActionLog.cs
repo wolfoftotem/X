@@ -5,9 +5,8 @@ namespace NewLife.Log
     /// <summary>依托于动作的日志类</summary>
     public class ActionLog : Logger
     {
-        private Action<String, Object[]> _Method;
         /// <summary>方法</summary>
-        public Action<String, Object[]> Method { get { return _Method; } set { _Method = value; } }
+        public Action<String, Object[]> Method { get; set; }
 
         /// <summary>使用指定方法否则动作日志</summary>
         /// <param name="action"></param>

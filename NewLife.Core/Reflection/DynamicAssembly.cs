@@ -8,13 +8,8 @@ namespace NewLife.Reflection
     /// <summary>全局方法程序集</summary>
     internal class DynamicAssembly
     {
-        private String _Name;
         /// <summary>名称</summary>
-        public String Name
-        {
-            get { return _Name; }
-            set { _Name = value; }
-        }
+        public String Name { get; set; }
 
         public DynamicAssembly(String name) { Name = name; }
 
@@ -46,13 +41,8 @@ namespace NewLife.Reflection
             //set { _ModBuilder = value; }
         }
 
-        private TypeBuilder _TypeBuilder;
         /// <summary>类型创建器</summary>
-        public TypeBuilder TypeBuilder
-        {
-            get { return _TypeBuilder; }
-            private set { _TypeBuilder = value; }
-        }
+        public TypeBuilder TypeBuilder { get; private set; }
 
         /// <summary>添加全局方法</summary>
         /// <param name="method"></param>

@@ -15,13 +15,11 @@ namespace NewLife.Xml
         /// <summary>数据</summary>
         public Dictionary<String, String> Data { get { return _Data ?? (_Data = new Dictionary<String, String>()); } set { _Data = value; } }
 
-        private List<String> _XmlKeys;
         /// <summary>Xml数据键值</summary>
-        public List<String> XmlKeys { get { return _XmlKeys; } set { _XmlKeys = value; } }
+        public List<String> XmlKeys { get; set; }
 
-        private String _Root;
         /// <summary>根名称</summary>
-        public String Root { get { return _Root; } set { _Root = value; } }
+        public String Root { get; set; }
         #endregion
 
         #region 集合管理

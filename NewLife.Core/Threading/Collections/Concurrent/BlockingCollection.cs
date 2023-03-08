@@ -10,10 +10,7 @@ namespace System.Collections.Concurrent
 	public class BlockingCollection<T> : IEnumerable<T>, ICollection, IEnumerable, IDisposable
 	{
 		private readonly IProducerConsumerCollection<T> underlyingColl;
-
-		private readonly int upperBound;
-
-		private AtomicBoolean isComplete;
+        private AtomicBoolean isComplete;
 
 		private long completeId;
 
@@ -24,9 +21,9 @@ namespace System.Collections.Concurrent
 		[ThreadStatic]
 		private SpinWait sw;
 
-		public int BoundedCapacity => upperBound;
+        public int BoundedCapacity { get; }
 
-		public int Count => underlyingColl.Count;
+        public int Count => underlyingColl.Count;
 
 		public bool IsAddingCompleted => isComplete.Value;
 
@@ -64,7 +61,7 @@ namespace System.Collections.Concurrent
 		public BlockingCollection(IProducerConsumerCollection<T> underlyingColl, int upperBound)
 		{
 			this.underlyingColl = underlyingColl;
-			this.upperBound = upperBound;
+			this.BoundedCapacity = upperBound;
 			isComplete = new AtomicBoolean();
 		}
 
@@ -84,7 +81,7 @@ namespace System.Collections.Concurrent
 			{
 				int cachedAddId = addId;
 				int cachedRemoveId = removeId;
-				if (upperBound != -1 && cachedAddId - cachedRemoveId > upperBound)
+				if (BoundedCapacity != -1 && cachedAddId - cachedRemoveId > BoundedCapacity)
 				{
 					Block();
 					continue;
@@ -165,7 +162,7 @@ namespace System.Collections.Concurrent
 				}
 				int cachedAddId = addId;
 				int cachedRemoveId = removeId;
-				if (upperBound != -1 && cachedAddId - cachedRemoveId > upperBound)
+				if (BoundedCapacity != -1 && cachedAddId - cachedRemoveId > BoundedCapacity)
 				{
 					continue;
 				}

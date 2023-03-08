@@ -5,21 +5,17 @@ namespace System.Threading
 	[DebuggerDisplay("Set = {IsSet}")]
 	public class ManualResetEventSlim : IDisposable
 	{
-		private readonly int spinCount;
-
-		private ManualResetEvent handle;
+        private ManualResetEvent handle;
 
 		internal AtomicBooleanValue disposed;
 
 		private bool used;
 
-		private bool set;
+        public bool IsSet { get; private set; }
 
-		public bool IsSet => set;
+        public int SpinCount { get; }
 
-		public int SpinCount => spinCount;
-
-		public WaitHandle WaitHandle
+        public WaitHandle WaitHandle
 		{
 			get
 			{
@@ -28,13 +24,13 @@ namespace System.Threading
 				{
 					return handle;
 				}
-				bool isSet = set;
+				bool isSet = IsSet;
 				ManualResetEvent mre = new ManualResetEvent(isSet);
 				if (Interlocked.CompareExchange(ref handle, mre, null) == null)
 				{
-					if (isSet != set)
+					if (isSet != IsSet)
 					{
-						if (set)
+						if (IsSet)
 						{
 							mre.Set();
 						}
@@ -69,14 +65,14 @@ namespace System.Threading
 			{
 				throw new ArgumentOutOfRangeException("spinCount");
 			}
-			set = initialState;
-			this.spinCount = spinCount;
+			IsSet = initialState;
+			this.SpinCount = spinCount;
 		}
 
 		public void Reset()
 		{
 			ThrowIfDisposed();
-			set = false;
+			IsSet = false;
 			Thread.MemoryBarrier();
 			if (handle != null)
 			{
@@ -90,7 +86,7 @@ namespace System.Threading
 
 		public void Set()
 		{
-			set = true;
+			IsSet = true;
 			Thread.MemoryBarrier();
 			if (handle != null)
 			{
@@ -129,19 +125,19 @@ namespace System.Threading
 				throw new ArgumentOutOfRangeException("millisecondsTimeout");
 			}
 			ThrowIfDisposed();
-			if (!set)
+			if (!IsSet)
 			{
 				SpinWait wait = default(SpinWait);
-				while (!set)
+				while (!IsSet)
 				{
 					cancellationToken.ThrowIfCancellationRequested();
-					if (wait.Count >= spinCount)
+					if (wait.Count >= SpinCount)
 					{
 						break;
 					}
 					wait.SpinOnce();
 				}
-				if (set)
+				if (IsSet)
 				{
 					return true;
 				}

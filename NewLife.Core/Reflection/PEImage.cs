@@ -15,25 +15,20 @@ namespace NewLife.Reflection
     public class PEImage
     {
         #region 属性
-        private PEFileKinds _Kind;
         /// <summary>可执行文件类型</summary>
-        public PEFileKinds Kind { get { return _Kind; } set { _Kind = value; } }
+        public PEFileKinds Kind { get; set; }
 
-        private PortableExecutableKinds _ExecutableKind;
         /// <summary>可执行文件代码特性</summary>
-        public PortableExecutableKinds ExecutableKind { get { return _ExecutableKind; } set { _ExecutableKind = value; } }
+        public PortableExecutableKinds ExecutableKind { get; set; }
 
-        private ImageFileMachine _Machine;
         /// <summary>可执行文件的目标平台</summary>
-        public ImageFileMachine Machine { get { return _Machine; } set { _Machine = value; } }
+        public ImageFileMachine Machine { get; set; }
 
-        private UInt16 _Characteristics;
         /// <summary>标识特性</summary>
-        public UInt16 Characteristics { get { return _Characteristics; } set { _Characteristics = value; } }
+        public UInt16 Characteristics { get; set; }
 
-        private Version _Version;
         /// <summary>版本</summary>
-        public Version Version { get { return _Version; } set { _Version = value; } }
+        public Version Version { get; set; }
 
         /// <summary>是否.Net程序</summary>
         public Boolean IsNet { get { return Version != null; } }

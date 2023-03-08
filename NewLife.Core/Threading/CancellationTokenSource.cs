@@ -4,9 +4,7 @@ namespace System.Threading
 {
 	public class CancellationTokenSource : IDisposable
 	{
-		private bool canceled;
-
-		private bool processed;
+        private bool processed;
 
 		private bool disposed;
 
@@ -35,9 +33,9 @@ namespace System.Threading
 			}
 		}
 
-		public bool IsCancellationRequested => canceled;
+        public bool IsCancellationRequested { get; private set; }
 
-		internal WaitHandle WaitHandle
+        internal WaitHandle WaitHandle
 		{
 			get
 			{
@@ -51,7 +49,7 @@ namespace System.Threading
 			NoneSource = new CancellationTokenSource();
 			CanceledSource = new CancellationTokenSource();
 			CanceledSource.processed = true;
-			CanceledSource.canceled = true;
+			CanceledSource.IsCancellationRequested = true;
 			timer_callback = delegate(object token)
 			{
 				CancellationTokenSource cancellationTokenSource = (CancellationTokenSource)token;
@@ -91,7 +89,7 @@ namespace System.Threading
 		public void Cancel(bool throwOnFirstException)
 		{
 			CheckDisposed();
-			canceled = true;
+			IsCancellationRequested = true;
 			handle.Set();
 			List<Exception> exceptions = null;
 			lock (syncRoot)
@@ -144,7 +142,7 @@ namespace System.Threading
 				throw new ArgumentOutOfRangeException("millisecondsDelay");
 			}
 			CheckDisposed();
-			if (canceled || millisecondsDelay == -1)
+			if (IsCancellationRequested || millisecondsDelay == -1)
 			{
 				return;
 			}
@@ -231,7 +229,7 @@ namespace System.Threading
 		{
 			CheckDisposed();
 			CancellationTokenRegistration tokenReg = new CancellationTokenRegistration(Interlocked.Increment(ref currId), this);
-			if (canceled)
+			if (IsCancellationRequested)
 			{
 				callback();
 			}
@@ -240,7 +238,7 @@ namespace System.Threading
 				bool temp = false;
 				lock (syncRoot)
 				{
-					if (!(temp = canceled))
+					if (!(temp = IsCancellationRequested))
 					{
 						callbacks.Add(tokenReg, callback);
 					}
@@ -255,11 +253,11 @@ namespace System.Threading
 
 		internal void RemoveCallback(CancellationTokenRegistration tokenReg)
 		{
-			if (!canceled)
+			if (!IsCancellationRequested)
 			{
 				lock (syncRoot)
 				{
-					if (!canceled)
+					if (!IsCancellationRequested)
 					{
 						callbacks.Remove(tokenReg);
 						return;

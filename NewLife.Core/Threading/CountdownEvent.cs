@@ -6,16 +6,13 @@ namespace System.Threading
 	public class CountdownEvent : IDisposable
 	{
 		private int initialCount;
-
-		private int initial;
-
-		private ManualResetEventSlim evt;
+        private ManualResetEventSlim evt;
 
 		public int CurrentCount => initialCount;
 
-		public int InitialCount => initial;
+        public int InitialCount { get; private set; }
 
-		public bool IsSet => initialCount == 0;
+        public bool IsSet => initialCount == 0;
 
 		public WaitHandle WaitHandle => evt.WaitHandle;
 
@@ -26,7 +23,7 @@ namespace System.Threading
 				throw new ArgumentOutOfRangeException("initialCount");
 			}
 			evt = new ManualResetEventSlim(initialCount == 0);
-			initial = (this.initialCount = initialCount);
+			InitialCount = (this.initialCount = initialCount);
 		}
 
 		public bool Signal()
@@ -135,7 +132,7 @@ namespace System.Threading
 
 		public void Reset()
 		{
-			Reset(initial);
+			Reset(InitialCount);
 		}
 
 		public void Reset(int count)
@@ -145,7 +142,7 @@ namespace System.Threading
 				throw new ArgumentOutOfRangeException("count");
 			}
 			CheckDisposed();
-			initialCount = (initial = count);
+			initialCount = (InitialCount = count);
 			if (count == 0)
 			{
 				evt.Set();

@@ -14,9 +14,8 @@ namespace NewLife.Security
         const UInt64 C1 = 0x87c37b91114253d5;
         const UInt64 C2 = 0x4cf5ad432745937f;
 
-        private readonly UInt32 _Seed;
         /// <summary>种子</summary>
-        public UInt32 Seed => _Seed;
+        public UInt32 Seed { get; }
 
         /// <summary>哈希大小</summary>
         public override Int32 HashSize => 128;
@@ -31,7 +30,7 @@ namespace NewLife.Security
         /// <param name="seed"></param>
         public Murmur128(UInt32 seed = 0)
         {
-            _Seed = seed;
+            Seed = seed;
             Reset();
         }
         #endregion

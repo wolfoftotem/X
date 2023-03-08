@@ -8,18 +8,13 @@ namespace System.Threading.Tasks
 	[DebuggerTypeProxy("System.Threading.Tasks.TaskScheduler+SystemThreadingTasks_TaskSchedulerDebugView")]
 	public abstract class TaskScheduler
 	{
-		private static TaskScheduler defaultScheduler = new TpScheduler();
-
-		[ThreadStatic]
+        [ThreadStatic]
 		private static TaskScheduler currentScheduler;
+        private static int lastId = int.MinValue;
 
-		private int id;
+        public static TaskScheduler Default { get; } = new TpScheduler();
 
-		private static int lastId = int.MinValue;
-
-		public static TaskScheduler Default => defaultScheduler;
-
-		public static TaskScheduler Current
+        public static TaskScheduler Current
 		{
 			get
 			{
@@ -27,7 +22,7 @@ namespace System.Threading.Tasks
 				{
 					return currentScheduler;
 				}
-				return defaultScheduler;
+				return Default;
 			}
 			internal set
 			{
@@ -35,15 +30,15 @@ namespace System.Threading.Tasks
 			}
 		}
 
-		public int Id => id;
+        public int Id { get; }
 
-		public virtual int MaximumConcurrencyLevel => Environment.ProcessorCount;
+        public virtual int MaximumConcurrencyLevel => Environment.ProcessorCount;
 
 		public static event EventHandler<UnobservedTaskExceptionEventArgs> UnobservedTaskException;
 
 		protected TaskScheduler()
 		{
-			id = Interlocked.Increment(ref lastId);
+			Id = Interlocked.Increment(ref lastId);
 		}
 
 		public static TaskScheduler FromCurrentSynchronizationContext()

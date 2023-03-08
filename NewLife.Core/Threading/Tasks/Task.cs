@@ -19,18 +19,9 @@ namespace System.Threading.Tasks
 		private static Action<Task> childWorkAdder;
 
 		internal readonly Task parent;
-
-		private readonly Task contAncestor;
-
-		private static int id = -1;
-
-		private static readonly TaskFactory defaultFactory = new TaskFactory();
-
-		private CountdownEvent childTasks;
-
-		private int taskId;
-
-		private TaskCreationOptions taskCreationOptions;
+        private static int id = -1;
+        private CountdownEvent childTasks;
+        private TaskCreationOptions taskCreationOptions;
 
 		internal TaskScheduler scheduler;
 
@@ -39,10 +30,7 @@ namespace System.Threading.Tasks
 		private TaskStatus status;
 
 		private TaskActionInvoker invoker;
-
-		private object state;
-
-		internal AtomicBooleanValue executing;
+        internal AtomicBooleanValue executing;
 
 		private TaskCompletionQueue<IContinuation> continuations;
 
@@ -50,9 +38,9 @@ namespace System.Threading.Tasks
 
 		private CancellationTokenRegistration? cancellationRegistration;
 
-		public static TaskFactory Factory => defaultFactory;
+        public static TaskFactory Factory { get; } = new TaskFactory();
 
-		public static int? CurrentId => current?.Id;
+        public static int? CurrentId => current?.Id;
 
 		public AggregateException Exception
 		{
@@ -101,19 +89,19 @@ namespace System.Threading.Tasks
 			}
 		}
 
-		public object AsyncState => state;
+        public object AsyncState { get; private set; }
 
-		bool IAsyncResult.CompletedSynchronously => true;
+        bool IAsyncResult.CompletedSynchronously => true;
 
 		WaitHandle IAsyncResult.AsyncWaitHandle => null;
 
-		public int Id => taskId;
+        public int Id { get; }
 
-		private bool IsContinuation => contAncestor != null;
+        private bool IsContinuation => ContinuationAncestor != null;
 
-		internal Task ContinuationAncestor => contAncestor;
+        internal Task ContinuationAncestor { get; }
 
-		internal string DisplayActionMethod
+        internal string DisplayActionMethod
 		{
 			get
 			{
@@ -188,12 +176,12 @@ namespace System.Threading.Tasks
 		{
 			this.invoker = invoker;
 			taskCreationOptions = creationOptions;
-			this.state = state;
-			taskId = Interlocked.Increment(ref id);
+			this.AsyncState = state;
+			Id = Interlocked.Increment(ref id);
 			status = (cancellationToken.IsCancellationRequested ? TaskStatus.Canceled : TaskStatus.Created);
 			token = cancellationToken;
 			this.parent = parent;
-			this.contAncestor = contAncestor;
+			this.ContinuationAncestor = contAncestor;
 			if (CheckTaskOptions(taskCreationOptions, TaskCreationOptions.AttachedToParent))
 			{
 				parent?.AddChild();
@@ -543,11 +531,11 @@ namespace System.Threading.Tasks
 		{
 			if (IsContinuation)
 			{
-				invoker.Invoke(contAncestor, state, this);
+				invoker.Invoke(ContinuationAncestor, AsyncState, this);
 			}
 			else
 			{
-				invoker.Invoke(this, state, this);
+				invoker.Invoke(this, AsyncState, this);
 			}
 		}
 
@@ -906,7 +894,7 @@ namespace System.Threading.Tasks
 			if (disposing)
 			{
 				invoker = null;
-				state = null;
+				AsyncState = null;
 				if (cancellationRegistration.HasValue)
 				{
 					cancellationRegistration.Value.Dispose();
@@ -1043,9 +1031,7 @@ namespace System.Threading.Tasks
 	[DebuggerDisplay("Id = {Id}, Status = {Status}, Result = {ResultAsString}")]
 	public class Task<TResult> : Task
 	{
-		private static readonly TaskFactory<TResult> factory = new TaskFactory<TResult>();
-
-		private TResult value;
+        private TResult value;
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public TResult Result
@@ -1084,9 +1070,9 @@ namespace System.Threading.Tasks
 			}
 		}
 
-		public new static TaskFactory<TResult> Factory => factory;
+        public new static TaskFactory<TResult> Factory { get; } = new TaskFactory<TResult>();
 
-		public Task(Func<TResult> function)
+        public Task(Func<TResult> function)
 			: this(function, TaskCreationOptions.None)
 		{
 		}

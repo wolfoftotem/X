@@ -38,21 +38,19 @@ namespace System.Collections.Concurrent
 			}
 		}
 
-		private bool keysOrderedInEachPartition;
-
-		private bool keysOrderedAcrossPartitions;
+        private bool keysOrderedAcrossPartitions;
 
 		private bool keysNormalized;
 
-		public bool KeysOrderedInEachPartition => keysOrderedInEachPartition;
+        public bool KeysOrderedInEachPartition { get; }
 
-		public bool KeysOrderedAcrossPartitions => keysOrderedAcrossPartitions;
+        public bool KeysOrderedAcrossPartitions => keysOrderedAcrossPartitions;
 
 		public bool KeysNormalized => keysNormalized;
 
 		protected OrderablePartitioner(bool keysOrderedInEachPartition, bool keysOrderedAcrossPartitions, bool keysNormalized)
 		{
-			this.keysOrderedInEachPartition = keysOrderedInEachPartition;
+			this.KeysOrderedInEachPartition = keysOrderedInEachPartition;
 			this.keysOrderedAcrossPartitions = keysOrderedAcrossPartitions;
 			this.keysNormalized = keysNormalized;
 		}

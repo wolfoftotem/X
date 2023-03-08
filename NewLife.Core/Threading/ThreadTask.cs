@@ -6,53 +6,17 @@ namespace NewLife.Threading
     /// <summary>线程任务</summary>
     class ThreadTask
     {
-        private Int32 _ID;
         /// <summary>唯一编号</summary>
-        public Int32 ID
-        {
-            get { return _ID; }
-            private set { _ID = value; }
-        }
+        public Int32 ID { get; private set; }
 
-        private WaitCallback _Method;
         /// <summary>任务方法</summary>
-        public WaitCallback Method
-        {
-            get { return _Method; }
-            set { _Method = value; }
-        }
+        public WaitCallback Method { get; set; }
 
-        private Object _Argument;
         /// <summary>任务参数</summary>
-        public Object Argument
-        {
-            get { return _Argument; }
-            set { _Argument = value; }
-        }
+        public Object Argument { get; set; }
 
-        //private AutoResetEvent _Event;
-        ///// <summary>事件量</summary>
-        //public AutoResetEvent Event
-        //{
-        //    get { return _Event; }
-        //    set { _Event = value; }
-        //}
-
-        //private UThread _Thread;
-        ///// <summary>处理该任务的线程</summary>
-        //public UThread Thread
-        //{
-        //    get { return _Thread; }
-        //    set { _Thread = value; }
-        //}
-
-        private WaitCallback _AbortMethod;
         /// <summary>取消任务时执行的方法</summary>
-        public WaitCallback AbortMethod
-        {
-            get { return _AbortMethod; }
-            set { _AbortMethod = value; }
-        }
+        public WaitCallback AbortMethod { get; set; }
 
         private static Object newID_Lock = new object();
         private static Int32 _newID;

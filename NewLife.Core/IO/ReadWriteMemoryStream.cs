@@ -16,21 +16,11 @@ namespace NewLife.IO
         /// <summary>获取或设置一个值（以毫秒为单位），该值确定流在超时前尝试读取多长时间。</summary>
         public override Int32 ReadTimeout { get { return _ReadTimeout; } set { _ReadTimeout = value; } }
 
-        //private Int32 _WriteTimeout;
-        ///// <summary>获取或设置一个值（以毫秒为单位），该值确定流在超时前尝试写入多长时间。</summary>
-        //public override Int32 WriteTimeout
-        //{
-        //    get { return _WriteTimeout; }
-        //    set { _WriteTimeout = value; }
-        //}
-
-        private Int64 _PositionForWrite;
         /// <summary>写位置</summary>
-        public Int64 PositionForWrite { get { return _PositionForWrite; } set { _PositionForWrite = value; } }
+        public Int64 PositionForWrite { get; set; }
 
-        private Int64 _MaxLength = 1024 * 1024;
         /// <summary>最大长度，超过次长度时清空缓冲区</summary>
-        public Int64 MaxLength { get { return _MaxLength; } set { _MaxLength = value; } }
+        public Int64 MaxLength { get; set; } = 1024 * 1024;
 
         private AutoResetEvent dataArrived = new AutoResetEvent(false);
         #endregion

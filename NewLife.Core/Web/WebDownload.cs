@@ -10,25 +10,20 @@ namespace NewLife.Web
     public class WebDownload
     {
         #region 属性
-        private Stream _Stream;
         /// <summary>数据流</summary>
-        public Stream Stream { get { return _Stream; } set { _Stream = value; } }
+        public Stream Stream { get; set; }
 
-        private String _FileName;
         /// <summary>文件名</summary>
-        public String FileName { get { return _FileName; } set { _FileName = value; } }
+        public String FileName { get; set; }
 
-        private String _ContentType = "application/octet-stream";
         /// <summary>内容类型</summary>
-        public String ContentType { get { return _ContentType; } set { _ContentType = value; } }
+        public String ContentType { get; set; } = "application/octet-stream";
 
-        private DispositionMode _Mode = DispositionMode.None;
         /// <summary>附件配置模式，是在浏览器直接打开，还是提示另存为</summary>
-        public DispositionMode Mode { get { return _Mode; } set { _Mode = value; } }
+        public DispositionMode Mode { get; set; } = DispositionMode.None;
 
-        private Int64 _Speed;
         /// <summary>速度，每秒传输字节数，根据包大小，每响应一个包后睡眠指定毫秒数，0表示不限制</summary>
-        public Int64 Speed { get { return _Speed; } set { _Speed = value; } }
+        public Int64 Speed { get; set; }
 
         /// <summary>是否启用浏览器缓存 默认禁用</summary>
         public bool BrowserCache { get; set; }
@@ -37,9 +32,8 @@ namespace NewLife.Web
         /// <summary>浏览器最大缓存时间 默认30天。通过Cache-Control头控制max-age，直接使用浏览器缓存，不会发出Http请求，对F5无效</summary>
         public TimeSpan BrowserCacheMaxAge { get { return _browserCacheMaxAge; } set { _browserCacheMaxAge = value; } }
 
-        private DateTime _ModifyTime;
         /// <summary>文件数据最后修改时间，浏览器缓存时用</summary>
-        public DateTime ModifyTime { get { return _ModifyTime; } set { _ModifyTime = value; } }
+        public DateTime ModifyTime { get; set; }
         #endregion
 
         #region 枚举

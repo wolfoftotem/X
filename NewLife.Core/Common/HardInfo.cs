@@ -191,109 +191,44 @@ namespace NewLife.Common
         #endregion
 
         #region 属性
-        private String _MachineName;
         /// <summary>机器名</summary>
-        public String MachineName
-        {
-            get { return _MachineName; }
-            set { _MachineName = value; }
-        }
+        public String MachineName { get; set; }
 
-        private String _BaseBoard;
         /// <summary>主板</summary>
-        public String BaseBoard
-        {
-            get { return _BaseBoard; }
-            set { _BaseBoard = value; }
-        }
+        public String BaseBoard { get; set; }
 
-        private String _Processors;
         /// <summary>处理器</summary>
-        public String Processors
-        {
-            get { return _Processors; }
-            set { _Processors = value; }
-        }
+        public String Processors { get; set; }
 
-        private String _Disk;
         /// <summary>磁盘</summary>
-        public String Disk
-        {
-            get { return _Disk; }
-            set { _Disk = value; }
-        }
+        public String Disk { get; set; }
 
-        private String _DiskSerial;
         /// <summary>磁盘序列号</summary>
-        public String DiskSerial
-        {
-            get { return _DiskSerial; }
-            set { _DiskSerial = value; }
-        }
+        public String DiskSerial { get; set; }
 
-        private String _Volume;
         /// <summary>驱动器序列号</summary>
-        public String Volume
-        {
-            get { return _Volume; }
-            set { _Volume = value; }
-        }
+        public String Volume { get; set; }
 
-        private String _Macs;
         /// <summary>网卡</summary>
-        public String Macs
-        {
-            get { return _Macs; }
-            set { _Macs = value; }
-        }
+        public String Macs { get; set; }
 
-        private String _IPs;
         /// <summary>IP地址</summary>
-        public String IPs
-        {
-            get { return _IPs; }
-            set { _IPs = value; }
-        }
+        public String IPs { get; set; }
 
-        private String _OSVersion;
         /// <summary>系统版本</summary>
-        public String OSVersion
-        {
-            get { return _OSVersion; }
-            set { _OSVersion = value; }
-        }
+        public String OSVersion { get; set; }
 
-        private long _Memory;
         /// <summary>内存</summary>
-        public long Memory
-        {
-            get { return _Memory; }
-            set { _Memory = value; }
-        }
+        public long Memory { get; set; }
 
-        private Int32 _ScreenWidth;
         /// <summary>屏幕宽</summary>
-        public Int32 ScreenWidth
-        {
-            get { return _ScreenWidth; }
-            set { _ScreenWidth = value; }
-        }
+        public Int32 ScreenWidth { get; set; }
 
-        private Int32 _ScreenHeight;
         /// <summary>屏幕高</summary>
-        public Int32 ScreenHeight
-        {
-            get { return _ScreenHeight; }
-            set { _ScreenHeight = value; }
-        }
+        public Int32 ScreenHeight { get; set; }
 
-        private Int64 _DiskSize;
         /// <summary>磁盘大小</summary>
-        public Int64 DiskSize
-        {
-            get { return _DiskSize; }
-            set { _DiskSize = value; }
-        }
+        public Int64 DiskSize { get; set; }
         #endregion
 
         #region 构造

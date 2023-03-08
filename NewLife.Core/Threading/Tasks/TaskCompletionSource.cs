@@ -4,11 +4,9 @@ namespace System.Threading.Tasks
 {
 	public class TaskCompletionSource<TResult>
 	{
-		private readonly Task<TResult> source;
+        public Task<TResult> Task { get; }
 
-		public Task<TResult> Task => source;
-
-		public TaskCompletionSource()
+        public TaskCompletionSource()
 			: this((object)null, TaskCreationOptions.None)
 		{
 		}
@@ -29,8 +27,8 @@ namespace System.Threading.Tasks
 			{
 				throw new ArgumentOutOfRangeException("creationOptions");
 			}
-			source = new Task<TResult>(TaskActionInvoker.Empty, state, CancellationToken.None, creationOptions, null);
-			source.SetupScheduler(TaskScheduler.Current);
+			Task = new Task<TResult>(TaskActionInvoker.Empty, state, CancellationToken.None, creationOptions, null);
+			Task.SetupScheduler(TaskScheduler.Current);
 		}
 
 		public void SetCanceled()
@@ -73,7 +71,7 @@ namespace System.Threading.Tasks
 
 		public bool TrySetCanceled()
 		{
-			return source.TrySetCanceled();
+			return Task.TrySetCanceled();
 		}
 
 		public bool TrySetException(Exception exception)
@@ -96,12 +94,12 @@ namespace System.Threading.Tasks
 			{
 				throw new ArgumentNullException("exceptions");
 			}
-			return source.TrySetException(aggregate);
+			return Task.TrySetException(aggregate);
 		}
 
 		public bool TrySetResult(TResult result)
 		{
-			return source.TrySetResult(result);
+			return Task.TrySetResult(result);
 		}
 	}
 }

@@ -43,12 +43,11 @@ public class TimerX : IDisposable
     /// <summary>基准时间。开机时间</summary>
     private static DateTime _baseTime;
 
-    private Int64 _nextTick;
     /// <summary>下一次执行时间。开机以来嘀嗒数，无惧时间回拨问题</summary>
-    public Int64 NextTick => _nextTick;
+    public Int64 NextTick { get; private set; }
 
     /// <summary>获取/设置 下一次调用时间</summary>
-    public DateTime NextTime => _baseTime.AddMilliseconds(_nextTick);
+    public DateTime NextTime => _baseTime.AddMilliseconds(NextTick);
 
     /// <summary>获取/设置 调用次数</summary>
     public Int32 Timers { get; internal set; }
@@ -72,7 +71,7 @@ public class TimerX : IDisposable
     public Func<Boolean>? CanExecute { get; set; }
 
     /// <summary>Cron表达式，实现复杂的定时逻辑</summary>
-    public Cron? Cron => _cron;
+    public Cron? Cron { get; }
 
     /// <summary>链路追踪。追踪每一次定时事件</summary>
     public ITracer? Tracer { get; set; }
@@ -81,7 +80,6 @@ public class TimerX : IDisposable
     public String TracerName { get; set; }
 
     private DateTime _AbsolutelyNext;
-    private Cron? _cron;
     #endregion
 
     #region 静态
@@ -102,8 +100,8 @@ public class TimerX : IDisposable
         State = state;
 
         // 使用开机滴答作为定时调度基准
-        _nextTick = Runtime.TickCount64;
-        _baseTime = DateTime.Now.AddMilliseconds(-_nextTick);
+        NextTick = Runtime.TickCount64;
+        _baseTime = DateTime.Now.AddMilliseconds(-NextTick);
 
         Scheduler = (scheduler == null || scheduler.IsNullOrEmpty()) ? TimerScheduler.Default : TimerScheduler.Create(scheduler);
         //Scheduler.Add(this);
@@ -212,13 +210,13 @@ public class TimerX : IDisposable
         if (callback == null) throw new ArgumentNullException(nameof(callback));
         if (cronExpression.IsNullOrEmpty()) throw new ArgumentNullException(nameof(cronExpression));
 
-        _cron = new Cron();
-        if (!_cron.Parse(cronExpression)) throw new ArgumentException("无效的Cron表达式", nameof(cronExpression));
+        Cron = new Cron();
+        if (!Cron.Parse(cronExpression)) throw new ArgumentException("无效的Cron表达式", nameof(cronExpression));
 
         Absolutely = true;
 
         var now = DateTime.Now;
-        var next = _cron.GetNext(now);
+        var next = Cron.GetNext(now);
         var ms = (Int64)(next - now).TotalMilliseconds;
         _AbsolutelyNext = next;
         Init(ms);
@@ -235,15 +233,15 @@ public class TimerX : IDisposable
         if (callback == null) throw new ArgumentNullException(nameof(callback));
         if (cronExpression.IsNullOrEmpty()) throw new ArgumentNullException(nameof(cronExpression));
 
-        _cron = new Cron();
-        if (!_cron.Parse(cronExpression)) throw new ArgumentException("无效的Cron表达式", nameof(cronExpression));
+        Cron = new Cron();
+        if (!Cron.Parse(cronExpression)) throw new ArgumentException("无效的Cron表达式", nameof(cronExpression));
 
         IsAsyncTask = true;
         Async = true;
         Absolutely = true;
 
         var now = DateTime.Now;
-        var next = _cron.GetNext(now);
+        var next = Cron.GetNext(now);
         var ms = (Int64)(next - now).TotalMilliseconds;
         _AbsolutelyNext = next;
         Init(ms);
@@ -282,7 +280,7 @@ public class TimerX : IDisposable
         // 使用开机滴答来做定时调度，无惧时间回拨，每次修正时间基准
         var tick = Runtime.TickCount64;
         _baseTime = DateTime.Now.AddMilliseconds(-tick);
-        _nextTick = tick + ms;
+        NextTick = tick + ms;
     }
 
     /// <summary>设置下一次运行时间</summary>
@@ -307,7 +305,7 @@ public class TimerX : IDisposable
         var nowTick = Runtime.TickCount64;
         if (hasSetNext)
         {
-            var ts = (Int32)(_nextTick - nowTick);
+            var ts = (Int32)(NextTick - nowTick);
             return ts > 0 ? ts : period;
         }
 
@@ -317,12 +315,12 @@ public class TimerX : IDisposable
             // 绝对时间还没有到时，不计算下一次
             var now = DateTime.Now;
             DateTime next;
-            if (_cron != null)
+            if (Cron != null)
             {
-                next = _cron.GetNext(now);
+                next = Cron.GetNext(now);
 
                 // 如果cron计算得到的下一次时间过近，则需要重新计算
-                if ((next - now).TotalMilliseconds < 1000) next = _cron.GetNext(next);
+                if ((next - now).TotalMilliseconds < 1000) next = Cron.GetNext(next);
             }
             else
             {
@@ -386,7 +384,7 @@ public class TimerX : IDisposable
     #region 辅助
     /// <summary>已重载</summary>
     /// <returns></returns>
-    public override String ToString() => $"[{Id}]{Method.DeclaringType?.Name}.{Method.Name} ({(_cron != null ? _cron.ToString() : (Period + "ms"))})";
+    public override String ToString() => $"[{Id}]{Method.DeclaringType?.Name}.{Method.Name} ({(Cron != null ? Cron.ToString() : (Period + "ms"))})";
     #endregion
 }
 #nullable restore

@@ -79,28 +79,24 @@ namespace NewLife.Web
     [XmlConfigFile("Config/UrlRewrite.config", 15000)]
     public class UrlConfig : XmlConfig<UrlConfig>
     {
-        private List<Item> _Urls;
         /// <summary>匹配地址集合</summary>
         [Description("Url为匹配请求地址的正则表达式，Target为要重写的目标地址，可以使用$1等匹配项，Name只是标识作用，不参与业务处理")]
-        public List<Item> Urls { get { return _Urls; } set { _Urls = value; } }
+        public List<Item> Urls { get; set; }
 
         /// <summary>Url重写地址配置项</summary>
         public class Item
         {
-            private String _Name;
             /// <summary>名称</summary>
             [XmlAttribute]
-            public String Name { get { return _Name; } set { _Name = value; } }
+            public String Name { get; set; }
 
-            private String _Url;
             /// <summary>Url正则表达式</summary>
             [XmlAttribute]
-            public String Url { get { return _Url; } set { _Url = value; } }
+            public String Url { get; set; }
 
-            private String _Target;
             /// <summary>目标地址</summary>
             [XmlAttribute]
-            public String Target { get { return _Target; } set { _Target = value; } }
+            public String Target { get; set; }
 
             private Regex _reg;
             /// <summary>获取指定输入的重写Url</summary>

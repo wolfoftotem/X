@@ -8,36 +8,34 @@ namespace System.Threading
 
 		private static readonly bool isSingleCpu = Environment.ProcessorCount == 1;
 
-		private int ntime;
-
-		public bool NextSpinWillYield
+        public bool NextSpinWillYield
 		{
 			get
 			{
 				if (!isSingleCpu)
 				{
-					return ntime % 10 == 0;
+					return Count % 10 == 0;
 				}
 				return true;
 			}
 		}
 
-		public int Count => ntime;
+        public int Count { get; private set; }
 
-		public void SpinOnce()
+        public void SpinOnce()
 		{
-			ntime++;
+			Count++;
 			if (isSingleCpu)
 			{
 				Thread.Sleep(0);
 			}
-			else if (ntime % 10 == 0)
+			else if (Count % 10 == 0)
 			{
 				Thread.Sleep(0);
 			}
 			else
 			{
-				Thread.SpinWait(Math.Min(ntime, 200) << 1);
+				Thread.SpinWait(Math.Min(Count, 200) << 1);
 			}
 		}
 
@@ -72,7 +70,7 @@ namespace System.Threading
 
 		public void Reset()
 		{
-			ntime = 0;
+			Count = 0;
 		}
 	}
 }

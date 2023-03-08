@@ -39,20 +39,18 @@ namespace System.Threading
 
 		private sealed class Scheduler
 		{
-			private static Scheduler instance;
-
-			private SortedList list;
+            private SortedList list;
 
 			private ManualResetEvent changed;
 
 			private static WaitCallback TimerCaller;
 
-			public static Scheduler Instance => instance;
+            public static Scheduler Instance { get; private set; }
 
-			static Scheduler()
+            static Scheduler()
 			{
 				TimerCaller = TimerCB;
-				instance = new Scheduler();
+				Instance = new Scheduler();
 			}
 
 			private Scheduler()

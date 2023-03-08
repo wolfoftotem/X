@@ -20,17 +20,13 @@ namespace NewLife.Configuration
         //[Description("用于生成CombGuid的基准日期")]
         //public DateTime BaseDate { get { return _BaseDate; } set { _BaseDate = value; } }
 
-        private Int32 _LastDays;
-
         /// <summary>上次系统生成CombGuid时的天数</summary>
         [DisplayName("上次系统生成CombGuid时的天数")]
-        public Int32 LastDays { get { return _LastDays; } set { _LastDays = value; } }
-
-        private Int32 _LastTenthMilliseconds;
+        public Int32 LastDays { get; set; }
 
         /// <summary>上次系统生成CombGuid时的时间，单位：100纳秒</summary>
         [DisplayName("上次系统生成CombGuid时的时间，单位：100纳秒")]
-        public Int32 LastTenthMilliseconds { get { return _LastTenthMilliseconds; } set { _LastTenthMilliseconds = value; } }
+        public Int32 LastTenthMilliseconds { get; set; }
 
         #endregion
 

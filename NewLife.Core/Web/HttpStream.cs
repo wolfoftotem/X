@@ -10,13 +10,8 @@ namespace NewLife.Web
     public class HttpStream : ReadWriteStream
     {
         #region 属性
-        private HttpContext _Context;
         /// <summary>HTTP上下文</summary>
-        public HttpContext Context
-        {
-            get { return _Context; }
-            private set { _Context = value; }
-        }
+        public HttpContext Context { get; private set; }
 
         private IPEndPoint _RemoteEndPoint;
         /// <summary>远程地址</summary>

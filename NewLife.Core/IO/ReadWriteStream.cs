@@ -7,13 +7,11 @@ namespace NewLife.IO
     public class ReadWriteStream : Stream
     {
         #region 属性
-        private Stream _InputStream;
         /// <summary>输入流</summary>
-        public Stream InputStream { get { return _InputStream; } set { _InputStream = value; } }
+        public Stream InputStream { get; set; }
 
-        private Stream _OutputStream;
         /// <summary>输出流</summary>
-        public Stream OutputStream { get { return _OutputStream; } set { _OutputStream = value; } }
+        public Stream OutputStream { get; set; }
         #endregion
 
         #region 构造

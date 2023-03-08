@@ -606,44 +606,28 @@ namespace System.Linq
 
     class RefCountList<T> : IRefCountList<T>
     {
-        private int _readerCount;
         private readonly IDictionary<int, RefCount> _list;
-        private int _count;
 
         public RefCountList(int readerCount)
         {
-            _readerCount = readerCount;
+            ReaderCount = readerCount;
             _list = new Dictionary<int, RefCount>();
         }
 
-        public int ReaderCount
-        {
-            get
-            {
-                return _readerCount;
-            }
-
-            set
-            {
-                _readerCount = value;
-            }
-        }
+        public int ReaderCount { get; set; }
 
         public void Clear()
         {
             _list.Clear();
         }
 
-        public int Count
-        {
-            get { return _count; }
-        }
+        public int Count { get; private set; }
 
         public T this[int i]
         {
             get
             {
-                Debug.Assert(i < _count);
+                Debug.Assert(i < Count);
 
                 var res = default(RefCount);
                 if (!_list.TryGetValue(i, out res))
@@ -659,18 +643,18 @@ namespace System.Linq
 
         public void Add(T item)
         {
-            _list[_count] = new RefCount { Value = item, Count = _readerCount };
-            _count++;
+            _list[Count] = new RefCount { Value = item, Count = ReaderCount };
+            Count++;
         }
 
         public void Done(int index)
         {
-            for (int i = index; i < _count; i++)
+            for (int i = index; i < Count; i++)
             {
                 var ignore = this[i];
             }
 
-            _readerCount--;
+            ReaderCount--;
         }
 
         class RefCount

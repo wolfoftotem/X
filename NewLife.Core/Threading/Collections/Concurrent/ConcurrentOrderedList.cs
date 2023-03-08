@@ -29,14 +29,11 @@ namespace System.Collections.Concurrent
 		private Node head;
 
 		private Node tail;
+        private int count;
 
-		private IEqualityComparer<T> comparer;
+        public IEqualityComparer<T> Comparer { get; }
 
-		private int count;
-
-		public IEqualityComparer<T> Comparer => comparer;
-
-		public int Count => count;
+        public int Count => count;
 
 		bool ICollection<T>.IsReadOnly => false;
 
@@ -51,7 +48,7 @@ namespace System.Collections.Concurrent
 			{
 				throw new ArgumentNullException("comparer");
 			}
-			this.comparer = comparer;
+			this.Comparer = comparer;
 			head = new Node();
 			tail = new Node();
 			head.Next = tail;
@@ -61,7 +58,7 @@ namespace System.Collections.Concurrent
 		{
 			Node node = new Node();
 			node.Data = data;
-			node.Key = comparer.GetHashCode(data);
+			node.Key = Comparer.GetHashCode(data);
 			if (ListInsert(node))
 			{
 				Interlocked.Increment(ref count);
@@ -73,7 +70,7 @@ namespace System.Collections.Concurrent
 		public bool TryRemove(T data)
 		{
 			T dummy;
-			return TryRemoveHash(comparer.GetHashCode(data), out dummy);
+			return TryRemoveHash(Comparer.GetHashCode(data), out dummy);
 		}
 
 		public bool TryRemoveHash(int key, out T data)
@@ -93,7 +90,7 @@ namespace System.Collections.Concurrent
 
 		public bool Contains(T data)
 		{
-			return ContainsHash(comparer.GetHashCode(data));
+			return ContainsHash(Comparer.GetHashCode(data));
 		}
 
 		public bool ContainsHash(int key)
