@@ -212,6 +212,9 @@ public class TinyHttpClient : DisposeBase, IApiClient
             res.Body = await ReadChunkAsync(rs);
         }
 
+        // 断开连接
+        if (!KeepAlive) Client.TryDispose();
+
         return res;
     }
 
@@ -412,6 +415,9 @@ public class TinyHttpClient : DisposeBase, IApiClient
         {
             res.Body = ReadChunk(rs);
         }
+
+        // 断开连接
+        if (!KeepAlive) Client.TryDispose();
 
         return res;
     }
@@ -722,6 +728,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
         {
             Method = method.ToUpper(),
             Url = new Uri(BaseAddress, action),
+            KeepAlive = KeepAlive,
         };
 
         var ps = args.ToDictionary();
