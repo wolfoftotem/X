@@ -179,6 +179,8 @@ namespace Microsoft.Runtime.CompilerServices
 
         internal static Exception PrepareExceptionForRethrow(Exception exc)
         {
+            if (exc is AggregateException agg) return agg;
+
             // 打包后再向外抛出异常，避免直接抛出打断了异常调用栈
             return new AggregateException(exc);
         }
