@@ -1,5 +1,4 @@
-﻿using System.Collections.Concurrent;
-using System.Globalization;
+﻿using System.Globalization;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -25,6 +24,9 @@ public class TinyHttpClient : DisposeBase, IApiClient
 
     /// <summary>基础地址</summary>
     public Uri BaseAddress { get; set; }
+
+    /// <summary>默认请求头</summary>
+    public HttpRequestHeaders DefaultRequestHeaders { get; } = new();
 
     /// <summary>保持连接</summary>
     public Boolean KeepAlive { get; set; }
@@ -60,14 +62,6 @@ public class TinyHttpClient : DisposeBase, IApiClient
 
         //Client.TryDispose();
         Close();
-
-        if (_Cache != null)
-        {
-            foreach (var item in _Cache)
-            {
-                item.Value.TryDispose();
-            }
-        }
     }
     #endregion
 
@@ -595,29 +589,6 @@ public class TinyHttpClient : DisposeBase, IApiClient
     #endregion
 
     #region 主要方法
-    private ConcurrentDictionary<String, IPool<TinyHttpClient>> _Cache;
-
-    /// <summary>根据主机获取对象池</summary>
-    /// <param name="host"></param>
-    /// <returns></returns>
-    protected virtual IPool<TinyHttpClient> GetPool(String host)
-    {
-        if (_Cache == null)
-        {
-            lock (this)
-            {
-                _Cache ??= new ConcurrentDictionary<String, IPool<TinyHttpClient>>();
-            }
-        }
-        return _Cache.GetOrAdd(host, k => new NewLife.Collections.ObjectPool<TinyHttpClient>
-        {
-            Min = 0,
-            Max = 100000,
-            IdleTime = 10,
-            AllIdleTime = 60
-        });
-    }
-
     /// <summary>异步获取</summary>
     /// <param name="url">地址</param>
     /// <returns></returns>
@@ -627,17 +598,9 @@ public class TinyHttpClient : DisposeBase, IApiClient
         {
             Url = new Uri(url),
         };
-        var pool = GetPool(request.Url.Host);
-        var client = pool.Get();
-        try
-        {
-            var rs = (await client.SendAsync(request).ConfigureAwait(false));
-            return rs?.Body?.ToStr();
-        }
-        finally
-        {
-            pool.Put(client);
-        }
+
+        var rs = (await SendAsync(request).ConfigureAwait(false));
+        return rs?.Body?.ToStr();
     }
 
     /// <summary>同步获取</summary>
@@ -649,17 +612,9 @@ public class TinyHttpClient : DisposeBase, IApiClient
         {
             Url = new Uri(url),
         };
-        var pool = GetPool(request.Url.Host);
-        var client = pool.Get();
-        try
-        {
-            var rs = client.Send(request);
-            return rs?.Body?.ToStr();
-        }
-        finally
-        {
-            pool.Put(client);
-        }
+
+        var rs = Send(request);
+        return rs?.Body?.ToStr();
     }
     #endregion
 
@@ -673,20 +628,13 @@ public class TinyHttpClient : DisposeBase, IApiClient
     {
         if (BaseAddress == null) throw new ArgumentNullException(nameof(BaseAddress));
 
-        // 序列化参数，决定GET/POST
-        var request = BuildRequest(method, action, args);
+        var headers = DefaultRequestHeaders;
+        if (method == "POST" && headers.ContentType.IsNullOrEmpty()) headers.ContentType = "application/json";
 
-        HttpResponseMessage rs = null;
-        var pool = GetPool(request.Url.Host);
-        var client = pool.Get();
-        try
-        {
-            rs = client.Send(request);
-        }
-        finally
-        {
-            pool.Put(client);
-        }
+        // 序列化参数，决定GET/POST
+        var request = CreateRequest(method, action, args);
+
+        var rs = Send(request);
 
         if (rs == null || rs.Body == null || rs.Body.Total == 0) return default;
 
@@ -703,44 +651,45 @@ public class TinyHttpClient : DisposeBase, IApiClient
     {
         if (BaseAddress == null) throw new ArgumentNullException(nameof(BaseAddress));
 
-        var request = BuildRequest(method, action, args);
+        var headers = DefaultRequestHeaders;
+        if (method == "POST" && headers.ContentType.IsNullOrEmpty()) headers.ContentType = "application/json";
 
-        HttpResponseMessage rs = null;
-        var pool = GetPool(request.Url.Host);
-        var client = pool.Get();
-        try
-        {
-            rs = await client.SendAsync(request);
-        }
-        finally
-        {
-            pool.Put(client);
-        }
+        var request = CreateRequest(method, action, args);
+
+        var rs = await SendAsync(request);
 
         if (rs == null || rs.Body == null || rs.Body.Total == 0) return default;
 
         return ProcessResponse<TResult>(rs.Body);
     }
 
-    public TResult Get<TResult>(String action, Object args = null) => Invoke<TResult>("Get", action, args);
+    public TResult Get<TResult>(String action, Object args = null) => Invoke<TResult>("GET", action, args);
 
-    public TResult Post<TResult>(String action, Object args = null) => Invoke<TResult>("Post", action, args);
+    public TResult Post<TResult>(String action, Object args = null) => Invoke<TResult>("POST", action, args);
 
-    public Task<TResult> GetAsync<TResult>(String action, Object args = null) => InvokeAsync<TResult>("Get", action, args);
+    public Task<TResult> GetAsync<TResult>(String action, Object args = null) => InvokeAsync<TResult>("GET", action, args);
 
-    public Task<TResult> PostAsync<TResult>(String action, Object args = null) => InvokeAsync<TResult>("Post", action, args);
+    public Task<TResult> PostAsync<TResult>(String action, Object args = null) => InvokeAsync<TResult>("POST", action, args);
 
-    private HttpRequestMessage BuildRequest(String method, String action, Object args)
+    /// <summary>构造请求</summary>
+    /// <param name="method"></param>
+    /// <param name="action"></param>
+    /// <param name="args"></param>
+    /// <returns></returns>
+    public HttpRequestMessage CreateRequest(String method, String action, Object args)
     {
+        var headers = DefaultRequestHeaders;
         var req = new HttpRequestMessage
         {
             Method = method.ToUpper(),
             Url = new Uri(BaseAddress, action),
             KeepAlive = KeepAlive,
+
+            ContentType = headers.ContentType,
         };
 
         var ps = args.ToDictionary();
-        if (method.EqualIgnoreCase("Post"))
+        if (method.EqualIgnoreCase("POST"))
             req.Body = ps.ToJson().GetBytes();
         else
         {
@@ -764,7 +713,14 @@ public class TinyHttpClient : DisposeBase, IApiClient
         return req;
     }
 
-    private TResult ProcessResponse<TResult>(Packet rs)
+    /// <summary>处理响应</summary>
+    /// <typeparam name="TResult"></typeparam>
+    /// <param name="rs"></param>
+    /// <returns></returns>
+    /// <exception cref="InvalidDataException"></exception>
+    /// <exception cref="InvalidOperationException"></exception>
+    /// <exception cref="ApiException"></exception>
+    public TResult ProcessResponse<TResult>(Packet rs)
     {
         var str = rs.ToStr();
         if (Type.GetTypeCode(typeof(TResult)) != TypeCode.Object) return str.ChangeType<TResult>();
@@ -789,9 +745,9 @@ public class TinyHttpClient : DisposeBase, IApiClient
         return JsonHelper.Convert<TResult>(data);
     }
 
-    TResult IApiClient.Invoke<TResult>(String action, Object args) => Invoke<TResult>(args == null ? "Get" : "Post", action, args);
+    TResult IApiClient.Invoke<TResult>(String action, Object args) => Invoke<TResult>(args == null ? "GET" : "POST", action, args);
 
-    Task<TResult> IApiClient.InvokeAsync<TResult>(String action, Object args) => InvokeAsync<TResult>(args == null ? "Get" : "Post", action, args);
+    Task<TResult> IApiClient.InvokeAsync<TResult>(String action, Object args) => InvokeAsync<TResult>(args == null ? "GET" : "POST", action, args);
     #endregion
 
     #region 日志
