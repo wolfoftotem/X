@@ -58,7 +58,8 @@ public class TinyHttpClient : DisposeBase, IApiClient
     {
         base.Dispose(disposing);
 
-        Client.TryDispose();
+        //Client.TryDispose();
+        Close();
 
         if (_Cache != null)
         {
@@ -176,7 +177,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
                     // 再次请求
                     var uri2 = new Uri(location);
 
-                    if (uri.Host != uri2.Host || uri.Scheme != uri2.Scheme) Client.TryDispose();
+                    if (uri.Host != uri2.Host || uri.Scheme != uri2.Scheme) Close();
 
                     uri = uri2;
                     request.Url = uri;
@@ -213,7 +214,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
         }
 
         // 断开连接
-        if (!KeepAlive) Client.TryDispose();
+        if (!KeepAlive) Close();
 
         return res;
     }
@@ -378,7 +379,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
                     // 再次请求
                     var uri2 = new Uri(location);
 
-                    if (uri.Host != uri2.Host || uri.Scheme != uri2.Scheme) Client.TryDispose();
+                    if (uri.Host != uri2.Host || uri.Scheme != uri2.Scheme) Close();
 
                     // 重建请求头，因为Uri改变后，头部字段也可能改变
                     uri = uri2;
@@ -417,7 +418,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
         }
 
         // 断开连接
-        if (!KeepAlive) Client.TryDispose();
+        if (!KeepAlive) Close();
 
         return res;
     }
@@ -479,6 +480,13 @@ public class TinyHttpClient : DisposeBase, IApiClient
     #endregion
 
     #region 辅助
+    void Close()
+    {
+        var tc = Client;
+        Client = null;
+        tc.TryDispose();
+    }
+
     ///// <summary>构造请求头</summary>
     ///// <param name="uri"></param>
     ///// <param name="data"></param>
