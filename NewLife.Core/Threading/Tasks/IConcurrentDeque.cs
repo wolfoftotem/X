@@ -1,15 +1,14 @@
 using System.Collections.Generic;
 
-namespace System.Threading.Tasks
+namespace System.Threading.Tasks;
+
+public interface IConcurrentDeque<T>
 {
-	public interface IConcurrentDeque<T>
-	{
-		void PushBottom(T obj);
+	void PushBottom(T obj);
 
-		PopResult PopBottom(out T obj);
+	PopResult PopBottom(out T obj);
 
-		PopResult PopTop(out T obj);
+	PopResult PopTop(out T obj);
 
-		IEnumerable<T> GetEnumerable();
-	}
+	IEnumerable<T> GetEnumerable();
 }

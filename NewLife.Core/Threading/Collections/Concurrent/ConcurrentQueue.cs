@@ -2,205 +2,203 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 
-namespace System.Collections.Concurrent
+namespace System.Collections.Concurrent;
+
+[DebuggerTypeProxy(typeof(CollectionDebuggerView<>))]
+[DebuggerDisplay("Count={Count}")]
+public class ConcurrentQueue<T> : IProducerConsumerCollection<T>, IEnumerable<T>, ICollection, IEnumerable
 {
-	[DebuggerTypeProxy(typeof(CollectionDebuggerView<>))]
-	[DebuggerDisplay("Count={Count}")]
-	public class ConcurrentQueue<T> : IProducerConsumerCollection<T>, IEnumerable<T>, ICollection, IEnumerable
+	private class Node
 	{
-		private class Node
+		public T Value;
+
+		public Node Next;
+	}
+
+	private class NodeObjectPool : ObjectPool<Node>
+	{
+		protected override Node Creator()
 		{
-			public T Value;
-
-			public Node Next;
+			return new Node();
 		}
+	}
 
-		private class NodeObjectPool : ObjectPool<Node>
-		{
-			protected override Node Creator()
-			{
-				return new Node();
-			}
-		}
+	private Node head = new Node();
 
-		private Node head = new Node();
+	private Node tail;
 
-		private Node tail;
+	private int count;
 
-		private int count;
+	private static readonly NodeObjectPool pool = new NodeObjectPool();
 
-		private static readonly NodeObjectPool pool = new NodeObjectPool();
+	private object syncRoot = new object();
 
-		private object syncRoot = new object();
+	bool ICollection.IsSynchronized => true;
 
-		bool ICollection.IsSynchronized => true;
+	object ICollection.SyncRoot => syncRoot;
 
-		object ICollection.SyncRoot => syncRoot;
+	public int Count => count;
 
-		public int Count => count;
+	public bool IsEmpty => count == 0;
 
-		public bool IsEmpty => count == 0;
+	private static Node ZeroOut(Node node)
+	{
+		node.Value = default(T);
+		node.Next = null;
+		return node;
+	}
 
-		private static Node ZeroOut(Node node)
-		{
-			node.Value = default(T);
-			node.Next = null;
-			return node;
-		}
+	public ConcurrentQueue()
+	{
+		tail = head;
+	}
 
-		public ConcurrentQueue()
-		{
-			tail = head;
-		}
-
-		public ConcurrentQueue(IEnumerable<T> collection)
-			: this()
-		{
-			foreach (T item in collection)
-			{
-				Enqueue(item);
-			}
-		}
-
-		public void Enqueue(T item)
-		{
-			Node node = pool.Take();
-			node.Value = item;
-			Node oldTail = null;
-			Node oldNext = null;
-			bool update = false;
-			while (!update)
-			{
-				oldTail = tail;
-				oldNext = oldTail.Next;
-				if (tail == oldTail)
-				{
-					if (oldNext == null)
-					{
-						update = Interlocked.CompareExchange(ref tail.Next, node, null) == null;
-					}
-					else
-					{
-						Interlocked.CompareExchange(ref tail, oldNext, oldTail);
-					}
-				}
-			}
-			Interlocked.CompareExchange(ref tail, node, oldTail);
-			Interlocked.Increment(ref count);
-		}
-
-		bool IProducerConsumerCollection<T>.TryAdd(T item)
+	public ConcurrentQueue(IEnumerable<T> collection)
+		: this()
+	{
+		foreach (T item in collection)
 		{
 			Enqueue(item);
-			return true;
 		}
+	}
 
-		public bool TryDequeue(out T result)
+	public void Enqueue(T item)
+	{
+		Node node = pool.Take();
+		node.Value = item;
+		Node node2 = null;
+		Node node3 = null;
+		bool flag = false;
+		while (!flag)
 		{
-			result = default(T);
-			bool advanced = false;
-			while (!advanced)
+			node2 = tail;
+			node3 = node2.Next;
+			if (tail == node2)
 			{
-				Node oldHead = head;
-				Node oldTail = tail;
-				Node oldNext = oldHead.Next;
-				if (oldHead != head)
+				if (node3 == null)
 				{
-					continue;
+					flag = Interlocked.CompareExchange(ref tail.Next, node, null) == null;
 				}
-				if (oldHead == oldTail)
+				else
 				{
-					if (oldNext != null)
-					{
-						Interlocked.CompareExchange(ref tail, oldNext, oldTail);
-					}
-					result = default(T);
-					return false;
-				}
-				result = oldNext.Value;
-				advanced = Interlocked.CompareExchange(ref head, oldNext, oldHead) == oldHead;
-				if (advanced)
-				{
-					pool.Release(ZeroOut(oldHead));
+					Interlocked.CompareExchange(ref tail, node3, node2);
 				}
 			}
-			Interlocked.Decrement(ref count);
-			return true;
 		}
+		Interlocked.CompareExchange(ref tail, node, node2);
+		Interlocked.Increment(ref count);
+	}
 
-		public bool TryPeek(out T result)
+	bool IProducerConsumerCollection<T>.TryAdd(T item)
+	{
+		Enqueue(item);
+		return true;
+	}
+
+	public bool TryDequeue(out T result)
+	{
+		result = default(T);
+		bool flag = false;
+		while (!flag)
 		{
-			if (IsEmpty)
+			Node node = head;
+			Node node2 = tail;
+			Node next = node.Next;
+			if (node != head)
 			{
+				continue;
+			}
+			if (node == node2)
+			{
+				if (next != null)
+				{
+					Interlocked.CompareExchange(ref tail, next, node2);
+				}
 				result = default(T);
 				return false;
 			}
-			Node first = head.Next;
-			result = first.Value;
-			return true;
-		}
-
-		internal void Clear()
-		{
-			count = 0;
-			tail = (head = new Node());
-		}
-
-		IEnumerator IEnumerable.GetEnumerator()
-		{
-			return InternalGetEnumerator();
-		}
-
-		public IEnumerator<T> GetEnumerator()
-		{
-			return InternalGetEnumerator();
-		}
-
-		private IEnumerator<T> InternalGetEnumerator()
-		{
-			Node my_head = head;
-			while (true)
+			result = next.Value;
+			flag = Interlocked.CompareExchange(ref head, next, node) == node;
+			if (flag)
 			{
-				Node next;
-				my_head = (next = my_head.Next);
-				if (next != null)
-				{
-					yield return my_head.Value;
-					continue;
-				}
-				break;
+				pool.Release(ZeroOut(node));
 			}
 		}
+		Interlocked.Decrement(ref count);
+		return true;
+	}
 
-		void ICollection.CopyTo(Array array, int index)
+	public bool TryPeek(out T result)
+	{
+		if (IsEmpty)
 		{
-			T[] dest = array as T[];
-			if (dest != null)
+			result = default(T);
+			return false;
+		}
+		Node next = head.Next;
+		result = next.Value;
+		return true;
+	}
+
+	internal void Clear()
+	{
+		count = 0;
+		tail = (head = new Node());
+	}
+
+	IEnumerator IEnumerable.GetEnumerator()
+	{
+		return InternalGetEnumerator();
+	}
+
+	public IEnumerator<T> GetEnumerator()
+	{
+		return InternalGetEnumerator();
+	}
+
+	private IEnumerator<T> InternalGetEnumerator()
+	{
+		Node my_head = head;
+		while (true)
+		{
+			Node next;
+			my_head = (next = my_head.Next);
+			if (next != null)
 			{
-				CopyTo(dest, index);
+				yield return my_head.Value;
+				continue;
 			}
+			break;
 		}
+	}
 
-		public void CopyTo(T[] array, int index)
+	void ICollection.CopyTo(Array array, int index)
+	{
+		if (array is T[] array2)
 		{
-			IEnumerator<T> e = InternalGetEnumerator();
-			int i = index;
-			while (e.MoveNext())
-			{
-				array[i++] = e.Current;
-			}
+			CopyTo(array2, index);
 		}
+	}
 
-		public T[] ToArray()
+	public void CopyTo(T[] array, int index)
+	{
+		IEnumerator<T> enumerator = InternalGetEnumerator();
+		int num = index;
+		while (enumerator.MoveNext())
 		{
-			T[] dest = new T[count];
-			CopyTo(dest, 0);
-			return dest;
+			array[num++] = enumerator.Current;
 		}
+	}
 
-		bool IProducerConsumerCollection<T>.TryTake(out T item)
-		{
-			return TryDequeue(out item);
-		}
+	public T[] ToArray()
+	{
+		T[] array = new T[count];
+		CopyTo(array, 0);
+		return array;
+	}
+
+	bool IProducerConsumerCollection<T>.TryTake(out T item)
+	{
+		return TryDequeue(out item);
 	}
 }

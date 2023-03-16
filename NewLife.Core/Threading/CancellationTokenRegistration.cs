@@ -1,53 +1,52 @@
-namespace System.Threading
+namespace System.Threading;
+
+public struct CancellationTokenRegistration : IDisposable, IEquatable<CancellationTokenRegistration>
 {
-	public struct CancellationTokenRegistration : IDisposable, IEquatable<CancellationTokenRegistration>
+	private int id;
+
+	private CancellationTokenSource source;
+
+	internal CancellationTokenRegistration(int id, CancellationTokenSource source)
 	{
-		private int id;
+		this.id = id;
+		this.source = source;
+	}
 
-		private CancellationTokenSource source;
+	public void Dispose()
+	{
+		source.RemoveCallback(this);
+	}
 
-		internal CancellationTokenRegistration(int id, CancellationTokenSource source)
+	public bool Equals(CancellationTokenRegistration other)
+	{
+		if (id == other.id)
 		{
-			this.id = id;
-			this.source = source;
+			return source == other.source;
 		}
+		return false;
+	}
 
-		public void Dispose()
-		{
-			source.RemoveCallback(this);
-		}
+	public static bool operator ==(CancellationTokenRegistration left, CancellationTokenRegistration right)
+	{
+		return left.Equals(right);
+	}
 
-		public bool Equals(CancellationTokenRegistration other)
+	public static bool operator !=(CancellationTokenRegistration left, CancellationTokenRegistration right)
+	{
+		return !left.Equals(right);
+	}
+
+	public override int GetHashCode()
+	{
+		return id.GetHashCode() ^ source.GetHashCode();
+	}
+
+	public override bool Equals(object obj)
+	{
+		if (!(obj is CancellationTokenRegistration))
 		{
-			if (id == other.id)
-			{
-				return source == other.source;
-			}
 			return false;
 		}
-
-		public static bool operator ==(CancellationTokenRegistration left, CancellationTokenRegistration right)
-		{
-			return left.Equals(right);
-		}
-
-		public static bool operator !=(CancellationTokenRegistration left, CancellationTokenRegistration right)
-		{
-			return !left.Equals(right);
-		}
-
-		public override int GetHashCode()
-		{
-			return id.GetHashCode() ^ source.GetHashCode();
-		}
-
-		public override bool Equals(object obj)
-		{
-			if (!(obj is CancellationTokenRegistration))
-			{
-				return false;
-			}
-			return Equals((CancellationTokenRegistration)obj);
-		}
+		return Equals((CancellationTokenRegistration)obj);
 	}
 }

@@ -1,360 +1,358 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 
-namespace System.Threading.Tasks
+namespace System.Threading.Tasks;
+
+public class ThreadWorker : IDisposable
 {
-	public class ThreadWorker : IDisposable
+	private const int maxRetry = 3;
+
+	private const int sleepThreshold = 100;
+
+	private Thread workerThread;
+
+	[ThreadStatic]
+	private static ThreadWorker autoReference;
+
+	private readonly IConcurrentDeque<Task> dDeque;
+
+	private readonly ThreadWorker[] others;
+
+	private readonly ManualResetEvent waitHandle;
+
+	private readonly IProducerConsumerCollection<Task> sharedWorkQueue;
+
+	private readonly ThreadPriority threadPriority;
+
+	private int started;
+
+	private readonly int workerLength;
+
+	private readonly int workerPosition;
+
+	private int deepSleepTime = 8;
+
+	private readonly Action<Task> adder;
+
+	private Task currentTask;
+
+	public bool Finished => started == 0;
+
+	public int Id => workerThread.ManagedThreadId;
+
+	public ThreadWorker(ThreadWorker[] others, int workerPosition, IProducerConsumerCollection<Task> sharedWorkQueue, IConcurrentDeque<Task> dDeque, ThreadPriority priority, ManualResetEvent handle)
 	{
-		private const int maxRetry = 3;
+		this.others = others;
+		this.dDeque = dDeque;
+		this.sharedWorkQueue = sharedWorkQueue;
+		workerLength = others.Length;
+		this.workerPosition = workerPosition;
+		waitHandle = handle;
+		threadPriority = priority;
+		adder = ChildWorkAdder;
+		InitializeUnderlyingThread();
+	}
 
-		private const int sleepThreshold = 100;
+	private void InitializeUnderlyingThread()
+	{
+		workerThread = new Thread(WorkerMethodWrapper);
+		workerThread.IsBackground = true;
+		workerThread.Name = "ParallelFxThreadWorker";
+	}
 
-		private Thread workerThread;
-
-		[ThreadStatic]
-		private static ThreadWorker autoReference;
-
-		private readonly IConcurrentDeque<Task> dDeque;
-
-		private readonly ThreadWorker[] others;
-
-		private readonly ManualResetEvent waitHandle;
-
-		private readonly IProducerConsumerCollection<Task> sharedWorkQueue;
-
-		private readonly ThreadPriority threadPriority;
-
-		private int started;
-
-		private readonly int workerLength;
-
-		private readonly int workerPosition;
-
-		private int deepSleepTime = 8;
-
-		private readonly Action<Task> adder;
-
-		private Task currentTask;
-
-		public bool Finished => started == 0;
-
-		public int Id => workerThread.ManagedThreadId;
-
-		public ThreadWorker(ThreadWorker[] others, int workerPosition, IProducerConsumerCollection<Task> sharedWorkQueue, IConcurrentDeque<Task> dDeque, ThreadPriority priority, ManualResetEvent handle)
+	public void Dispose()
+	{
+		Stop();
+		if (workerThread.ThreadState != ThreadState.Stopped)
 		{
-			this.others = others;
-			this.dDeque = dDeque;
-			this.sharedWorkQueue = sharedWorkQueue;
-			workerLength = others.Length;
-			this.workerPosition = workerPosition;
-			waitHandle = handle;
-			threadPriority = priority;
-			adder = ChildWorkAdder;
-			InitializeUnderlyingThread();
+			workerThread.Abort();
 		}
+	}
 
-		private void InitializeUnderlyingThread()
+	public void Pulse()
+	{
+		if (started != 1 && Interlocked.Exchange(ref started, 1) == 0)
 		{
-			workerThread = new Thread(WorkerMethodWrapper);
-			workerThread.IsBackground = true;
-			workerThread.Name = "ParallelFxThreadWorker";
-		}
-
-		public void Dispose()
-		{
-			Stop();
-			if (workerThread.ThreadState != ThreadState.Stopped)
+			if (workerThread.ThreadState != ThreadState.Unstarted)
 			{
-				workerThread.Abort();
+				InitializeUnderlyingThread();
+			}
+			workerThread.Start();
+		}
+	}
+
+	public void Stop()
+	{
+		started = 0;
+	}
+
+	private void WorkerMethodWrapper()
+	{
+		int num = 0;
+		autoReference = this;
+		bool flag = false;
+		while (started == 1)
+		{
+			bool flag2 = false;
+			flag2 = WorkerMethod();
+			if (!flag2 && flag)
+			{
+				waitHandle.Reset();
+			}
+			flag = false;
+			Thread.Sleep(0);
+			if (flag2)
+			{
+				deepSleepTime = 8;
+				num = 0;
+			}
+			else if (++num > 100 && sharedWorkQueue.Count == 0)
+			{
+				flag = waitHandle.WaitOne(deepSleepTime = ((deepSleepTime >= 16384) ? 16384 : (deepSleepTime << 1)));
 			}
 		}
+		started = 0;
+	}
 
-		public void Pulse()
+	private bool WorkerMethod()
+	{
+		bool result = false;
+		bool flag;
+		do
 		{
-			if (started != 1 && Interlocked.Exchange(ref started, 1) == 0)
+			flag = false;
+			Task obj;
+			while (sharedWorkQueue.Count > 0)
 			{
-				if (workerThread.ThreadState != ThreadState.Unstarted)
+				waitHandle.Set();
+				while (sharedWorkQueue.TryTake(out obj))
 				{
-					InitializeUnderlyingThread();
+					dDeque.PushBottom(obj);
 				}
-				workerThread.Start();
-			}
-		}
-
-		public void Stop()
-		{
-			started = 0;
-		}
-
-		private void WorkerMethodWrapper()
-		{
-			int sleepTime = 0;
-			autoReference = this;
-			bool wasWokenUp = false;
-			while (started == 1)
-			{
-				bool result = false;
-				result = WorkerMethod();
-				if (!result && wasWokenUp)
-				{
-					waitHandle.Reset();
-				}
-				wasWokenUp = false;
-				Thread.Sleep(0);
-				if (result)
-				{
-					deepSleepTime = 8;
-					sleepTime = 0;
-				}
-				else if (++sleepTime > 100 && sharedWorkQueue.Count == 0)
-				{
-					wasWokenUp = waitHandle.WaitOne(deepSleepTime = ((deepSleepTime >= 16384) ? 16384 : (deepSleepTime << 1)));
-				}
-			}
-			started = 0;
-		}
-
-		private bool WorkerMethod()
-		{
-			bool result = false;
-			bool hasStolenFromOther;
-			do
-			{
-				hasStolenFromOther = false;
-				Task value;
-				while (sharedWorkQueue.Count > 0)
+				while (dDeque.PopBottom(out obj) == PopResult.Succeed)
 				{
 					waitHandle.Set();
-					while (sharedWorkQueue.TryTake(out value))
+					ExecuteTask(obj, ref result);
+				}
+			}
+			for (int i = 0; i < 3; i++)
+			{
+				int num = workerLength + workerPosition;
+				for (int j = workerPosition + 1; j < num; j++)
+				{
+					int num2 = j % workerLength;
+					ThreadWorker threadWorker;
+					if ((threadWorker = others[num2]) == null || threadWorker == this)
 					{
-						dDeque.PushBottom(value);
+						continue;
 					}
-					while (dDeque.PopBottom(out value) == PopResult.Succeed)
+					while (threadWorker.dDeque.PopTop(out obj) == PopResult.Succeed)
 					{
-						waitHandle.Set();
-						ExecuteTask(value, ref result);
+						if (!flag)
+						{
+							waitHandle.Set();
+						}
+						flag = true;
+						ExecuteTask(obj, ref result);
 					}
 				}
-				for (int j = 0; j < 3; j++)
+			}
+		}
+		while (sharedWorkQueue.Count > 0 || flag);
+		return result;
+	}
+
+	private void ExecuteTask(Task value, ref bool result)
+	{
+		if (value != null)
+		{
+			Task task = currentTask;
+			currentTask = value;
+			value.Execute(adder);
+			result = true;
+			currentTask = task;
+		}
+	}
+
+	public static void ParticipativeWorkerMethod(Task self, ManualResetEventSlim predicateEvt, int millisecondsTimeout, IProducerConsumerCollection<Task> sharedWorkQueue, ThreadWorker[] others, ManualResetEvent evt)
+	{
+		int num = 50;
+		WaitHandle[] waitHandles = null;
+		Watch watch = Watch.StartNew();
+		if (millisecondsTimeout == -1)
+		{
+			millisecondsTimeout = int.MaxValue;
+		}
+		bool flag = false;
+		bool flag2 = autoReference != null;
+		Action<Task> action = null;
+		while (!predicateEvt.IsSet && watch.ElapsedMilliseconds < millisecondsTimeout && !self.IsCompleted)
+		{
+			if (self.Status == TaskStatus.WaitingToRun)
+			{
+				self.Execute(flag2 ? autoReference.adder : null);
+				if (predicateEvt.IsSet || watch.ElapsedMilliseconds > millisecondsTimeout)
 				{
-					int len = workerLength + workerPosition;
-					for (int it = workerPosition + 1; it < len; it++)
+					break;
+				}
+			}
+			if (flag2)
+			{
+				IEnumerable<Task> enumerable = autoReference.dDeque.GetEnumerable();
+				if (action == null)
+				{
+					action = (flag2 ? autoReference.adder : null);
+				}
+				if (enumerable != null)
+				{
+					foreach (Task item2 in enumerable)
 					{
-						int i = it % workerLength;
-						ThreadWorker other;
-						if ((other = others[i]) == null || other == this)
+						if (item2 != null)
 						{
-							continue;
-						}
-						while (other.dDeque.PopTop(out value) == PopResult.Succeed)
-						{
-							if (!hasStolenFromOther)
+							if (CheckTaskFitness(self, item2))
 							{
-								waitHandle.Set();
+								item2.Execute(action);
 							}
-							hasStolenFromOther = true;
-							ExecuteTask(value, ref result);
-						}
-					}
-				}
-			}
-			while (sharedWorkQueue.Count > 0 || hasStolenFromOther);
-			return result;
-		}
-
-		private void ExecuteTask(Task value, ref bool result)
-		{
-			if (value != null)
-			{
-				Task saveCurrent = currentTask;
-				currentTask = value;
-				value.Execute(adder);
-				result = true;
-				currentTask = saveCurrent;
-			}
-		}
-
-		public static void ParticipativeWorkerMethod(Task self, ManualResetEventSlim predicateEvt, int millisecondsTimeout, IProducerConsumerCollection<Task> sharedWorkQueue, ThreadWorker[] others, ManualResetEvent evt)
-		{
-			int tries = 50;
-			WaitHandle[] handles = null;
-			Watch watch = Watch.StartNew();
-			if (millisecondsTimeout == -1)
-			{
-				millisecondsTimeout = int.MaxValue;
-			}
-			bool aggressive = false;
-			bool hasAutoReference = autoReference != null;
-			Action<Task> adder = null;
-			while (!predicateEvt.IsSet && watch.ElapsedMilliseconds < millisecondsTimeout && !self.IsCompleted)
-			{
-				if (self.Status == TaskStatus.WaitingToRun)
-				{
-					self.Execute(hasAutoReference ? autoReference.adder : null);
-					if (predicateEvt.IsSet || watch.ElapsedMilliseconds > millisecondsTimeout)
-					{
-						break;
-					}
-				}
-				if (hasAutoReference)
-				{
-					IEnumerable<Task> enumerable = autoReference.dDeque.GetEnumerable();
-					if (adder == null)
-					{
-						adder = (hasAutoReference ? autoReference.adder : null);
-					}
-					if (enumerable != null)
-					{
-						foreach (Task t in enumerable)
-						{
-							if (t != null)
+							if (predicateEvt.IsSet || watch.ElapsedMilliseconds > millisecondsTimeout)
 							{
-								if (CheckTaskFitness(self, t))
-								{
-									t.Execute(adder);
-								}
-								if (predicateEvt.IsSet || watch.ElapsedMilliseconds > millisecondsTimeout)
-								{
-									return;
-								}
+								return;
 							}
 						}
 					}
 				}
-				int count = sharedWorkQueue.Count;
-				Task value;
-				while (--count >= 0 && sharedWorkQueue.TryTake(out value) && value != null)
+			}
+			int num2 = sharedWorkQueue.Count;
+			Task item;
+			while (--num2 >= 0 && sharedWorkQueue.TryTake(out item) && item != null)
+			{
+				evt.Set();
+				if (CheckTaskFitness(self, item) || flag)
+				{
+					item.Execute(null);
+				}
+				else
+				{
+					if (autoReference == null)
+					{
+						sharedWorkQueue.TryAdd(item);
+					}
+					else
+					{
+						autoReference.dDeque.PushBottom(item);
+					}
+					evt.Set();
+				}
+				if (predicateEvt.IsSet || watch.ElapsedMilliseconds > millisecondsTimeout)
+				{
+					return;
+				}
+			}
+			if (predicateEvt.IsSet || watch.ElapsedMilliseconds > millisecondsTimeout)
+			{
+				break;
+			}
+			for (int i = 0; i < others.Length; i++)
+			{
+				ThreadWorker threadWorker;
+				if ((threadWorker = others[i]) == autoReference || threadWorker == null)
+				{
+					continue;
+				}
+				if (threadWorker.dDeque.PopTop(out item) == PopResult.Succeed && item != null)
 				{
 					evt.Set();
-					if (CheckTaskFitness(self, value) || aggressive)
+					if (CheckTaskFitness(self, item) || flag)
 					{
-						value.Execute(null);
+						item.Execute(null);
 					}
 					else
 					{
 						if (autoReference == null)
 						{
-							sharedWorkQueue.TryAdd(value);
+							sharedWorkQueue.TryAdd(item);
 						}
 						else
 						{
-							autoReference.dDeque.PushBottom(value);
+							autoReference.dDeque.PushBottom(item);
 						}
 						evt.Set();
-					}
-					if (predicateEvt.IsSet || watch.ElapsedMilliseconds > millisecondsTimeout)
-					{
-						return;
 					}
 				}
 				if (predicateEvt.IsSet || watch.ElapsedMilliseconds > millisecondsTimeout)
 				{
-					break;
-				}
-				for (int i = 0; i < others.Length; i++)
-				{
-					ThreadWorker other;
-					if ((other = others[i]) == autoReference || other == null)
-					{
-						continue;
-					}
-					if (other.dDeque.PopTop(out value) == PopResult.Succeed && value != null)
-					{
-						evt.Set();
-						if (CheckTaskFitness(self, value) || aggressive)
-						{
-							value.Execute(null);
-						}
-						else
-						{
-							if (autoReference == null)
-							{
-								sharedWorkQueue.TryAdd(value);
-							}
-							else
-							{
-								autoReference.dDeque.PushBottom(value);
-							}
-							evt.Set();
-						}
-					}
-					if (predicateEvt.IsSet || watch.ElapsedMilliseconds > millisecondsTimeout)
-					{
-						return;
-					}
-				}
-				if (--tries > 5)
-				{
-					Thread.Sleep(0);
-					continue;
-				}
-				if (tries >= 0)
-				{
-					predicateEvt.Wait(ComputeTimeout(5, millisecondsTimeout, watch));
-					continue;
-				}
-				if (tries == -1)
-				{
-					handles = new WaitHandle[2] { predicateEvt.WaitHandle, evt };
-				}
-				WaitHandle.WaitAny(handles, ComputeTimeout(1000, millisecondsTimeout, watch));
-				if (tries == -10)
-				{
-					aggressive = true;
+					return;
 				}
 			}
-		}
-
-		private static bool CheckTaskFitness(Task self, Task t)
-		{
-			if (((t.CreationOptions & TaskCreationOptions.LongRunning) != 0 || t.Id >= self.Id) && t.Parent != self && t != self)
+			if (--num > 5)
 			{
-				if (autoReference != null && autoReference.currentTask != null)
-				{
-					return autoReference.currentTask == t.Parent;
-				}
-				return false;
+				Thread.Sleep(0);
+				continue;
 			}
-			return true;
-		}
-
-		internal void ChildWorkAdder(Task t)
-		{
-			dDeque.PushBottom(t);
-			waitHandle.Set();
-		}
-
-		private static int ComputeTimeout(int proposed, int timeout, Watch watch)
-		{
-			if (timeout != int.MaxValue)
+			if (num >= 0)
 			{
-				return Math.Min(proposed, Math.Max(0, (int)(timeout - watch.ElapsedMilliseconds)));
+				predicateEvt.Wait(ComputeTimeout(5, millisecondsTimeout, watch));
+				continue;
 			}
-			return proposed;
-		}
-
-		public virtual bool Equals(ThreadWorker other)
-		{
-			if (other != null)
+			if (num == -1)
 			{
-				return object.ReferenceEquals(dDeque, other.dDeque);
+				waitHandles = new WaitHandle[2] { predicateEvt.WaitHandle, evt };
+			}
+			WaitHandle.WaitAny(waitHandles, ComputeTimeout(1000, millisecondsTimeout, watch));
+			if (num == -10)
+			{
+				flag = true;
+			}
+		}
+	}
+
+	private static bool CheckTaskFitness(Task self, Task t)
+	{
+		if (((t.CreationOptions & TaskCreationOptions.LongRunning) != 0 || t.Id >= self.Id) && t.Parent != self && t != self)
+		{
+			if (autoReference != null && autoReference.currentTask != null)
+			{
+				return autoReference.currentTask == t.Parent;
 			}
 			return false;
 		}
+		return true;
+	}
 
-		public override bool Equals(object obj)
-		{
-			ThreadWorker temp = obj as ThreadWorker;
-			if (temp != null)
-			{
-				return Equals(temp);
-			}
-			return false;
-		}
+	internal void ChildWorkAdder(Task t)
+	{
+		dDeque.PushBottom(t);
+		waitHandle.Set();
+	}
 
-		public override int GetHashCode()
+	private static int ComputeTimeout(int proposed, int timeout, Watch watch)
+	{
+		if (timeout != int.MaxValue)
 		{
-			return workerThread.ManagedThreadId.GetHashCode();
+			return Math.Min(proposed, Math.Max(0, (int)(timeout - watch.ElapsedMilliseconds)));
 		}
+		return proposed;
+	}
+
+	public virtual bool Equals(ThreadWorker other)
+	{
+		if (other != null)
+		{
+			return object.ReferenceEquals(dDeque, other.dDeque);
+		}
+		return false;
+	}
+
+	public override bool Equals(object obj)
+	{
+		if (obj is ThreadWorker other)
+		{
+			return Equals(other);
+		}
+		return false;
+	}
+
+	public override int GetHashCode()
+	{
+		return workerThread.ManagedThreadId.GetHashCode();
 	}
 }

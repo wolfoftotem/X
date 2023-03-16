@@ -1,7 +1,6 @@
-namespace System.Threading.Tasks
+namespace System.Threading.Tasks;
+
+internal interface IContinuation
 {
-	internal interface IContinuation
-	{
-		void Execute();
-	}
+	void Execute();
 }

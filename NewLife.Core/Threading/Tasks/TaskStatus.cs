@@ -1,14 +1,13 @@
-namespace System.Threading.Tasks
+namespace System.Threading.Tasks;
+
+public enum TaskStatus
 {
-	public enum TaskStatus
-	{
-		Created,
-		WaitingForActivation,
-		WaitingToRun,
-		Running,
-		WaitingForChildrenToComplete,
-		RanToCompletion,
-		Canceled,
-		Faulted
-	}
+	Created,
+	WaitingForActivation,
+	WaitingToRun,
+	Running,
+	WaitingForChildrenToComplete,
+	RanToCompletion,
+	Canceled,
+	Faulted
 }

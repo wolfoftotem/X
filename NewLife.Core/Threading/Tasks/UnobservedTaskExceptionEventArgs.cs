@@ -1,21 +1,22 @@
-namespace System.Threading.Tasks
+namespace System.Threading.Tasks;
+
+public class UnobservedTaskExceptionEventArgs : EventArgs
 {
-	public class UnobservedTaskExceptionEventArgs : EventArgs
+	private AggregateException exception;
+
+	private bool wasObserved;
+
+	public AggregateException Exception => exception;
+
+	public bool Observed => wasObserved;
+
+	public UnobservedTaskExceptionEventArgs(AggregateException exception)
 	{
-        private bool wasObserved;
+		this.exception = exception;
+	}
 
-        public AggregateException Exception { get; }
-
-        public bool Observed => wasObserved;
-
-		public UnobservedTaskExceptionEventArgs(AggregateException exception)
-		{
-			this.Exception = exception;
-		}
-
-		public void SetObserved()
-		{
-			wasObserved = true;
-		}
+	public void SetObserved()
+	{
+		wasObserved = true;
 	}
 }

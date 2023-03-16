@@ -1,30 +1,29 @@
-namespace System.Threading
+namespace System.Threading;
+
+internal struct Watch
 {
-	internal struct Watch
+	private long startTicks;
+
+	public long ElapsedMilliseconds => (TicksNow() - startTicks) / 10000;
+
+	public static Watch StartNew()
 	{
-		private long startTicks;
+		Watch result = default(Watch);
+		result.Start();
+		return result;
+	}
 
-		public long ElapsedMilliseconds => (TicksNow() - startTicks) / 10000;
+	public void Start()
+	{
+		startTicks = TicksNow();
+	}
 
-		public static Watch StartNew()
-		{
-			Watch watch = default(Watch);
-			watch.Start();
-			return watch;
-		}
+	public void Stop()
+	{
+	}
 
-		public void Start()
-		{
-			startTicks = TicksNow();
-		}
-
-		public void Stop()
-		{
-		}
-
-		private static long TicksNow()
-		{
-			return DateTime.Now.Ticks;
-		}
+	private static long TicksNow()
+	{
+		return DateTime.Now.Ticks;
 	}
 }

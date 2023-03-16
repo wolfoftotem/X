@@ -1,29 +1,28 @@
 using System.Collections.Concurrent;
 
-namespace System.Threading.Tasks
+namespace System.Threading.Tasks;
+
+internal class TaskExceptionSlot
 {
-	internal class TaskExceptionSlot
+	public volatile AggregateException Exception;
+
+	public volatile bool Observed;
+
+	public ConcurrentQueue<AggregateException> ChildExceptions;
+
+	private Task parent;
+
+	public TaskExceptionSlot(Task parent)
 	{
-		public volatile AggregateException Exception;
+		this.parent = parent;
+	}
 
-		public volatile bool Observed;
-
-		public ConcurrentQueue<AggregateException> ChildExceptions;
-
-		private Task parent;
-
-		public TaskExceptionSlot(Task parent)
+	~TaskExceptionSlot()
+	{
+		if (Exception != null && (!Observed && !TaskScheduler.FireUnobservedEvent(parent, Exception).Observed))
 		{
-			this.parent = parent;
-		}
-
-		~TaskExceptionSlot()
-		{
-			if (Exception != null && (!Observed && !TaskScheduler.FireUnobservedEvent(parent, Exception).Observed))
-			{
-				parent = null;
-				throw Exception;
-			}
+			parent = null;
+			throw Exception;
 		}
 	}
 }

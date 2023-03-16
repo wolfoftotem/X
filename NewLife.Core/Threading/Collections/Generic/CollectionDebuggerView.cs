@@ -1,45 +1,44 @@
 using System.Diagnostics;
 
-namespace System.Collections.Generic
+namespace System.Collections.Generic;
+
+internal sealed class CollectionDebuggerView<T>
 {
-	internal sealed class CollectionDebuggerView<T>
+	private readonly ICollection<T> c;
+
+	[DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
+	public T[] Items
 	{
-		private readonly ICollection<T> c;
-
-		[DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
-		public T[] Items
+		get
 		{
-			get
-			{
-				T[] o = new T[c.Count];
-				c.CopyTo(o, 0);
-				return o;
-			}
-		}
-
-		public CollectionDebuggerView(ICollection<T> col)
-		{
-			c = col;
+			T[] array = new T[c.Count];
+			c.CopyTo(array, 0);
+			return array;
 		}
 	}
-	internal sealed class CollectionDebuggerView<T, U>
+
+	public CollectionDebuggerView(ICollection<T> col)
 	{
-		private readonly ICollection<KeyValuePair<T, U>> c;
+		c = col;
+	}
+}
+internal sealed class CollectionDebuggerView<T, U>
+{
+	private readonly ICollection<KeyValuePair<T, U>> c;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
-		public KeyValuePair<T, U>[] Items
+	[DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
+	public KeyValuePair<T, U>[] Items
+	{
+		get
 		{
-			get
-			{
-				KeyValuePair<T, U>[] o = new KeyValuePair<T, U>[c.Count];
-				c.CopyTo(o, 0);
-				return o;
-			}
+			KeyValuePair<T, U>[] array = new KeyValuePair<T, U>[c.Count];
+			c.CopyTo(array, 0);
+			return array;
 		}
+	}
 
-		public CollectionDebuggerView(ICollection<KeyValuePair<T, U>> col)
-		{
-			c = col;
-		}
+	public CollectionDebuggerView(ICollection<KeyValuePair<T, U>> col)
+	{
+		c = col;
 	}
 }

@@ -1,25 +1,24 @@
 using System.Diagnostics;
 
-namespace System.Collections
+namespace System.Collections;
+
+internal sealed class CollectionDebuggerView
 {
-	internal sealed class CollectionDebuggerView
+	private readonly ICollection c;
+
+	[DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
+	public object[] Items
 	{
-		private readonly ICollection c;
-
-		[DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
-		public object[] Items
+		get
 		{
-			get
-			{
-				object[] o = new object[c.Count];
-				c.CopyTo(o, 0);
-				return o;
-			}
+			object[] array = new object[c.Count];
+			c.CopyTo(array, 0);
+			return array;
 		}
+	}
 
-		public CollectionDebuggerView(ICollection col)
-		{
-			c = col;
-		}
+	public CollectionDebuggerView(ICollection col)
+	{
+		c = col;
 	}
 }

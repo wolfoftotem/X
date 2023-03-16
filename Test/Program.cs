@@ -11,6 +11,7 @@ using NewLife.Net;
 using NewLife.Security;
 using NewLife.Serialization;
 using NewLife;
+using System.Threading.Tasks;
 
 namespace Test;
 
@@ -33,7 +34,7 @@ public class Program
             try
             {
 #endif
-            Test3();
+            Test1();
 #if !DEBUG
             }
             catch (Exception ex)
@@ -49,7 +50,12 @@ public class Program
         }
     }
 
-    static async void Test1()
+    static void Test1()
+    {
+        TestTask().Wait();
+    }
+
+    static async Task TestTask()
     {
         var client = new TinyHttpClient("http://star.newlifex.com:6600");
 
@@ -59,9 +65,9 @@ public class Program
         var rs = await client.GetAsync<Object>("api", new { state = 1234 });
         XTrace.WriteLine(rs.ToJson(true));
 
-        var rs2 = await client.PostAsync<Object>("node/ping", new { state = 1234 });
-        //var rs2 = await client.InvokeAsync<Object>("option", "api", new { state = 1234 });
-        XTrace.WriteLine(rs2.ToJson(true));
+        //var rs2 = await client.PostAsync<Object>("node/ping", new { state = 1234 });
+        ////var rs2 = await client.InvokeAsync<Object>("option", "api", new { state = 1234 });
+        //XTrace.WriteLine(rs2.ToJson(true));
     }
 
     static void Test2()

@@ -1,17 +1,16 @@
-namespace System.Threading.Tasks
+namespace System.Threading.Tasks;
+
+internal class CountdownEventSlot : IContinuation
 {
-	internal class CountdownEventSlot : IContinuation
+	private CountdownEvent evt;
+
+	public CountdownEventSlot(CountdownEvent evt)
 	{
-		private CountdownEvent evt;
+		this.evt = evt;
+	}
 
-		public CountdownEventSlot(CountdownEvent evt)
-		{
-			this.evt = evt;
-		}
-
-		public void Execute()
-		{
-			evt.Signal();
-		}
+	public void Execute()
+	{
+		evt.Signal();
 	}
 }

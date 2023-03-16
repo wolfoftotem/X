@@ -4,156 +4,154 @@ using System.Diagnostics;
 using System.Runtime.Serialization;
 using System.Text;
 
-namespace System
+namespace System;
+
+[Serializable]
+[DebuggerDisplay("Count = {InnerExceptions.Count}")]
+public class AggregateException : Exception
 {
-	[Serializable]
-	[DebuggerDisplay("Count = {InnerExceptions.Count}")]
-	public class AggregateException : Exception
+	private const string defaultMessage = "One or more errors occured";
+
+	private List<Exception> innerExceptions = new List<Exception>();
+
+	public ReadOnlyCollection<Exception> InnerExceptions => innerExceptions.AsReadOnly();
+
+	public AggregateException()
+		: base("One or more errors occured")
 	{
-		private const string defaultMessage = "One or more errors occured";
+	}
 
-		private List<Exception> innerExceptions = new List<Exception>();
+	public AggregateException(string message)
+		: base(message)
+	{
+	}
 
-		public ReadOnlyCollection<Exception> InnerExceptions => innerExceptions.AsReadOnly();
-
-		public AggregateException()
-			: base("One or more errors occured")
+	public AggregateException(string message, Exception innerException)
+		: base(message, innerException)
+	{
+		if (innerException == null)
 		{
+			throw new ArgumentNullException("innerException");
 		}
+		innerExceptions.Add(innerException);
+	}
 
-		public AggregateException(string message)
-			: base(message)
+	protected AggregateException(SerializationInfo info, StreamingContext context)
+		: base(info, context)
+	{
+	}
+
+	public AggregateException(params Exception[] innerExceptions)
+		: this(string.Empty, innerExceptions)
+	{
+	}
+
+	public AggregateException(string message, params Exception[] innerExceptions)
+		: base(message, (innerExceptions == null || innerExceptions.Length == 0) ? null : innerExceptions[0])
+	{
+		if (innerExceptions == null)
 		{
+			throw new ArgumentNullException("innerExceptions");
 		}
-
-		public AggregateException(string message, Exception innerException)
-			: base(message, innerException)
+		foreach (Exception ex in innerExceptions)
 		{
-			if (innerException == null)
+			if (ex == null)
 			{
-				throw new ArgumentNullException("innerException");
+				throw new ArgumentException("One of the inner exception is null", "innerExceptions");
 			}
-			innerExceptions.Add(innerException);
 		}
+		this.innerExceptions.AddRange(innerExceptions);
+	}
 
-		protected AggregateException(SerializationInfo info, StreamingContext context)
-			: base(info, context)
-		{
-		}
+	public AggregateException(IEnumerable<Exception> innerExceptions)
+		: this("One or more errors occured", innerExceptions)
+	{
+	}
 
-		public AggregateException(params Exception[] innerExceptions)
-			: this(string.Empty, innerExceptions)
-		{
-		}
+	public AggregateException(string message, IEnumerable<Exception> innerExceptions)
+		: this(message, new List<Exception>(innerExceptions).ToArray())
+	{
+	}
 
-		public AggregateException(string message, params Exception[] innerExceptions)
-			: base(message, (innerExceptions == null || innerExceptions.Length == 0) ? null : innerExceptions[0])
+	public AggregateException Flatten()
+	{
+		List<Exception> list = new List<Exception>();
+		foreach (Exception innerException in innerExceptions)
 		{
-			if (innerExceptions == null)
+			if (innerException is AggregateException ex)
 			{
-				throw new ArgumentNullException("innerExceptions");
+				list.AddRange(ex.Flatten().InnerExceptions);
 			}
-			foreach (Exception exception in innerExceptions)
+			else
 			{
-				if (exception == null)
+				list.Add(innerException);
+			}
+		}
+		return new AggregateException(list);
+	}
+
+	public void Handle(Func<Exception, bool> predicate)
+	{
+		List<Exception> list = new List<Exception>();
+		foreach (Exception innerException in innerExceptions)
+		{
+			try
+			{
+				if (!predicate(innerException))
 				{
-					throw new ArgumentException("One of the inner exception is null", "innerExceptions");
+					list.Add(innerException);
 				}
 			}
-			this.innerExceptions.AddRange(innerExceptions);
-		}
-
-		public AggregateException(IEnumerable<Exception> innerExceptions)
-			: this("One or more errors occured", innerExceptions)
-		{
-		}
-
-		public AggregateException(string message, IEnumerable<Exception> innerExceptions)
-			: this(message, new List<Exception>(innerExceptions).ToArray())
-		{
-		}
-
-		public AggregateException Flatten()
-		{
-			List<Exception> inner = new List<Exception>();
-			foreach (Exception e in innerExceptions)
+			catch
 			{
-				AggregateException aggEx = e as AggregateException;
-				if (aggEx != null)
-				{
-					inner.AddRange(aggEx.Flatten().InnerExceptions);
-				}
-				else
-				{
-					inner.Add(e);
-				}
-			}
-			return new AggregateException(inner);
-		}
-
-		public void Handle(Func<Exception, bool> predicate)
-		{
-			List<Exception> failed = new List<Exception>();
-			foreach (Exception e in innerExceptions)
-			{
-				try
-				{
-					if (!predicate(e))
-					{
-						failed.Add(e);
-					}
-				}
-				catch
-				{
-					throw new AggregateException(failed);
-				}
-			}
-			if (failed.Count > 0)
-			{
-				throw new AggregateException(failed);
+				throw new AggregateException(list);
 			}
 		}
-
-		internal void AddChildException(AggregateException childEx)
+		if (list.Count > 0)
 		{
-			if (innerExceptions == null)
-			{
-				innerExceptions = new List<Exception>();
-			}
-			if (childEx != null)
-			{
-				innerExceptions.Add(childEx);
-			}
+			throw new AggregateException(list);
 		}
+	}
 
-		public override string ToString()
+	internal void AddChildException(AggregateException childEx)
+	{
+		if (innerExceptions == null)
 		{
-			StringBuilder finalMessage = new StringBuilder(base.ToString());
-			int currentIndex = -1;
-			foreach (Exception e in innerExceptions)
-			{
-				finalMessage.Append(Environment.NewLine);
-				finalMessage.Append(" --> (Inner exception ");
-				finalMessage.Append(++currentIndex);
-				finalMessage.Append(") ");
-				finalMessage.Append(e.ToString());
-				finalMessage.Append(Environment.NewLine);
-			}
-			return finalMessage.ToString();
+			innerExceptions = new List<Exception>();
 		}
+		if (childEx != null)
+		{
+			innerExceptions.Add(childEx);
+		}
+	}
 
-		public override void GetObjectData(SerializationInfo info, StreamingContext context)
+	public override string ToString()
+	{
+		StringBuilder stringBuilder = new StringBuilder(base.ToString());
+		int num = -1;
+		foreach (Exception innerException in innerExceptions)
 		{
-			throw new NotImplementedException();
+			stringBuilder.Append(Environment.NewLine);
+			stringBuilder.Append(" --> (Inner exception ");
+			stringBuilder.Append(++num);
+			stringBuilder.Append(") ");
+			stringBuilder.Append(innerException.ToString());
+			stringBuilder.Append(Environment.NewLine);
 		}
+		return stringBuilder.ToString();
+	}
 
-		public override Exception GetBaseException()
+	public override void GetObjectData(SerializationInfo info, StreamingContext context)
+	{
+		throw new NotImplementedException();
+	}
+
+	public override Exception GetBaseException()
+	{
+		if (innerExceptions == null || innerExceptions.Count == 0)
 		{
-			if (innerExceptions == null || innerExceptions.Count == 0)
-			{
-				return this;
-			}
-			return innerExceptions[0].GetBaseException();
+			return this;
 		}
+		return innerExceptions[0].GetBaseException();
 	}
 }

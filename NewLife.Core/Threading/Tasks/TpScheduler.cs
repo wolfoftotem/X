@@ -1,41 +1,40 @@
 using System.Collections.Generic;
 using System.Security;
 
-namespace System.Threading.Tasks
+namespace System.Threading.Tasks;
+
+internal class TpScheduler : TaskScheduler
 {
-	internal class TpScheduler : TaskScheduler
+	private static readonly WaitCallback callback = TaskExecuterCallback;
+
+	public override int MaximumConcurrencyLevel => base.MaximumConcurrencyLevel;
+
+	[SecurityCritical]
+	protected internal override void QueueTask(Task task)
 	{
-		private static readonly WaitCallback callback = TaskExecuterCallback;
+		ThreadPool.UnsafeQueueUserWorkItem(callback, task);
+	}
 
-		public override int MaximumConcurrencyLevel => base.MaximumConcurrencyLevel;
+	private static void TaskExecuterCallback(object obj)
+	{
+		Task task = (Task)obj;
+		task.Execute();
+	}
 
-		[SecurityCritical]
-		protected internal override void QueueTask(Task task)
-		{
-			ThreadPool.UnsafeQueueUserWorkItem(callback, task);
-		}
+	protected override IEnumerable<Task> GetScheduledTasks()
+	{
+		throw new NotImplementedException();
+	}
 
-		private static void TaskExecuterCallback(object obj)
-		{
-			Task task = (Task)obj;
-			task.Execute();
-		}
+	[SecurityCritical]
+	protected internal override bool TryDequeue(Task task)
+	{
+		throw new NotImplementedException();
+	}
 
-		protected override IEnumerable<Task> GetScheduledTasks()
-		{
-			throw new NotImplementedException();
-		}
-
-		[SecurityCritical]
-		protected internal override bool TryDequeue(Task task)
-		{
-			throw new NotImplementedException();
-		}
-
-		[SecurityCritical]
-		protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued)
-		{
-			return TryExecuteTask(task);
-		}
+	[SecurityCritical]
+	protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued)
+	{
+		return TryExecuteTask(task);
 	}
 }

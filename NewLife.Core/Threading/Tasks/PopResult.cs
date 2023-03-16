@@ -1,9 +1,8 @@
-namespace System.Threading.Tasks
+namespace System.Threading.Tasks;
+
+public enum PopResult
 {
-	public enum PopResult
-	{
-		Succeed,
-		Empty,
-		Abort
-	}
+	Succeed,
+	Empty,
+	Abort
 }

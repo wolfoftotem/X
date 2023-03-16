@@ -1,31 +1,42 @@
 using System.Collections.Generic;
 
-namespace System.Collections
+namespace System.Collections;
+
+public static class StructuralComparisons
 {
-	public static class StructuralComparisons
+	private sealed class ComparerImpl : IComparer, IEqualityComparer
 	{
-		private sealed class ComparerImpl : IComparer, IEqualityComparer
+		int IComparer.Compare(object x, object y)
 		{
-			int IComparer.Compare(object x, object y)
+			if (x is IStructuralComparable structuralComparable)
 			{
-				return (x as IStructuralComparable)?.CompareTo(y, this) ?? Comparer.Default.Compare(x, y);
+				return structuralComparable.CompareTo(y, this);
 			}
-
-			int IEqualityComparer.GetHashCode(object obj)
-			{
-				return (obj as IEqualityComparer)?.GetHashCode(this) ?? EqualityComparer<object>.Default.GetHashCode(obj);
-			}
-
-			bool IEqualityComparer.Equals(object x, object y)
-			{
-				return (x as IEqualityComparer)?.Equals(y, this) ?? EqualityComparer<object>.Default.Equals(x, y);
-			}
+			return Comparer.Default.Compare(x, y);
 		}
 
-		private static readonly ComparerImpl comparer = new ComparerImpl();
+		int IEqualityComparer.GetHashCode(object obj)
+		{
+			if (obj is IEqualityComparer equalityComparer)
+			{
+				return equalityComparer.GetHashCode(this);
+			}
+			return EqualityComparer<object>.Default.GetHashCode(obj);
+		}
 
-		public static IComparer StructuralComparer => comparer;
-
-		public static IEqualityComparer StructuralEqualityComparer => comparer;
+		bool IEqualityComparer.Equals(object x, object y)
+		{
+			if (x is IEqualityComparer equalityComparer)
+			{
+				return equalityComparer.Equals(y, this);
+			}
+			return EqualityComparer<object>.Default.Equals(x, y);
+		}
 	}
+
+	private static readonly ComparerImpl comparer = new ComparerImpl();
+
+	public static IComparer StructuralComparer => comparer;
+
+	public static IEqualityComparer StructuralEqualityComparer => comparer;
 }

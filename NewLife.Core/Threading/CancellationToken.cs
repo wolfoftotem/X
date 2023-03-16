@@ -1,98 +1,97 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 
-namespace System.Threading
+namespace System.Threading;
+
+[DebuggerDisplay("IsCancellationRequested = {IsCancellationRequested}")]
+public struct CancellationToken
 {
-	[DebuggerDisplay("IsCancellationRequested = {IsCancellationRequested}")]
-	public struct CancellationToken
+	private readonly CancellationTokenSource source;
+
+	public static CancellationToken None => default(CancellationToken);
+
+	public bool CanBeCanceled => source != null;
+
+	public bool IsCancellationRequested => Source.IsCancellationRequested;
+
+	public WaitHandle WaitHandle => Source.WaitHandle;
+
+	private CancellationTokenSource Source => source ?? CancellationTokenSource.NoneSource;
+
+	public CancellationToken(bool canceled)
+		: this(canceled ? CancellationTokenSource.CanceledSource : null)
 	{
-		private readonly CancellationTokenSource source;
+	}
 
-		public static CancellationToken None => default(CancellationToken);
+	internal CancellationToken(CancellationTokenSource source)
+	{
+		this.source = source;
+	}
 
-		public bool CanBeCanceled => source != null;
+	public CancellationTokenRegistration Register(Action callback)
+	{
+		return Register(callback, useSynchronizationContext: false);
+	}
 
-		public bool IsCancellationRequested => Source.IsCancellationRequested;
-
-		public WaitHandle WaitHandle => Source.WaitHandle;
-
-		private CancellationTokenSource Source => source ?? CancellationTokenSource.NoneSource;
-
-		public CancellationToken(bool canceled)
-			: this(canceled ? CancellationTokenSource.CanceledSource : null)
+	public CancellationTokenRegistration Register(Action callback, bool useSynchronizationContext)
+	{
+		if (callback == null)
 		{
+			throw new ArgumentNullException("callback");
 		}
+		return Source.Register(callback, useSynchronizationContext);
+	}
 
-		internal CancellationToken(CancellationTokenSource source)
-		{
-			this.source = source;
-		}
+	public CancellationTokenRegistration Register(Action<object> callback, object state)
+	{
+		return Register(callback, state, useSynchronizationContext: false);
+	}
 
-		public CancellationTokenRegistration Register(Action callback)
+	public CancellationTokenRegistration Register(Action<object> callback, object state, bool useSynchronizationContext)
+	{
+		if (callback == null)
 		{
-			return Register(callback, useSynchronizationContext: false);
+			throw new ArgumentNullException("callback");
 		}
+		return Register(delegate
+		{
+			callback(state);
+		}, useSynchronizationContext);
+	}
 
-		public CancellationTokenRegistration Register(Action callback, bool useSynchronizationContext)
+	public void ThrowIfCancellationRequested()
+	{
+		if (Source.IsCancellationRequested)
 		{
-			if (callback == null)
-			{
-				throw new ArgumentNullException("callback");
-			}
-			return Source.Register(callback, useSynchronizationContext);
+			throw new OperationCanceledException(this);
 		}
+	}
 
-		public CancellationTokenRegistration Register(Action<object> callback, object state)
-		{
-			return Register(callback, state, useSynchronizationContext: false);
-		}
+	public bool Equals(CancellationToken other)
+	{
+		return Source == other.Source;
+	}
 
-		public CancellationTokenRegistration Register(Action<object> callback, object state, bool useSynchronizationContext)
+	public override bool Equals(object other)
+	{
+		if (!(other is CancellationToken))
 		{
-			if (callback == null)
-			{
-				throw new ArgumentNullException("callback");
-			}
-			return Register(delegate
-			{
-				callback(state);
-			}, useSynchronizationContext);
+			return false;
 		}
+		return Equals((CancellationToken)other);
+	}
 
-		public void ThrowIfCancellationRequested()
-		{
-			if (Source.IsCancellationRequested)
-			{
-				throw new OperationCanceledException();
-			}
-		}
+	public override int GetHashCode()
+	{
+		return Source.GetHashCode();
+	}
 
-		public bool Equals(CancellationToken other)
-		{
-			return Source == other.Source;
-		}
+	public static bool operator ==(CancellationToken left, CancellationToken right)
+	{
+		return left.Equals(right);
+	}
 
-		public override bool Equals(object other)
-		{
-			if (!(other is CancellationToken))
-			{
-				return false;
-			}
-			return Equals((CancellationToken)other);
-		}
-
-		public override int GetHashCode()
-		{
-			return Source.GetHashCode();
-		}
-
-		public static bool operator ==(CancellationToken left, CancellationToken right)
-		{
-			return left.Equals(right);
-		}
-
-		public static bool operator !=(CancellationToken left, CancellationToken right)
-		{
-			return !left.Equals(right);
-		}
+	public static bool operator !=(CancellationToken left, CancellationToken right)
+	{
+		return !left.Equals(right);
 	}
 }

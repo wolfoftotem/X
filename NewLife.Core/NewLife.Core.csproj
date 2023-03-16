@@ -172,14 +172,8 @@
     <Compile Remove="Serialization\RWKinds.cs" />
     <Compile Remove="Serialization\RWService.cs" />
     <Compile Remove="Serialization\XSerializationException.cs" />
-    <Compile Remove="Threading\Collections\ArrayList.cs" />
-    <Compile Remove="Threading\Collections\Comparer.cs" />
-    <Compile Remove="Threading\Collections\SortedList.cs" />
-    <Compile Remove="Threading\OperationCanceledException.cs" />
     <Compile Remove="Threading\ThreadPriority.cs" />
     <Compile Remove="Threading\ThreadX.cs" />
-    <Compile Remove="Threading\Timer.cs" />
-    <Compile Remove="Threading\TimerCallback.cs" />
     <Compile Remove="Web\HttpState.cs" />
     <Compile Remove="Web\Js.cs" />
     <Compile Remove="Windows\MySpeech.cs" />

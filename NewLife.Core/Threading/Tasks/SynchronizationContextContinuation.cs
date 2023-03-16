@@ -1,23 +1,22 @@
-namespace System.Threading.Tasks
+namespace System.Threading.Tasks;
+
+internal class SynchronizationContextContinuation : IContinuation
 {
-	internal class SynchronizationContextContinuation : IContinuation
+	private readonly Action action;
+
+	private readonly SynchronizationContext ctx;
+
+	public SynchronizationContextContinuation(Action action, SynchronizationContext ctx)
 	{
-		private readonly Action action;
+		this.action = action;
+		this.ctx = ctx;
+	}
 
-		private readonly SynchronizationContext ctx;
-
-		public SynchronizationContextContinuation(Action action, SynchronizationContext ctx)
+	public void Execute()
+	{
+		ctx.Post(delegate(object l)
 		{
-			this.action = action;
-			this.ctx = ctx;
-		}
-
-		public void Execute()
-		{
-			ctx.Post(delegate(object l)
-			{
-				((Action)l)();
-			}, action);
-		}
+			((Action)l)();
+		}, action);
 	}
 }

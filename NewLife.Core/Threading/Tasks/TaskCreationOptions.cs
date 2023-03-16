@@ -1,14 +1,13 @@
-namespace System.Threading.Tasks
+namespace System.Threading.Tasks;
+
+[Serializable]
+[Flags]
+public enum TaskCreationOptions
 {
-	[Serializable]
-	[Flags]
-	public enum TaskCreationOptions
-	{
-		None = 0x0,
-		PreferFairness = 0x1,
-		LongRunning = 0x2,
-		AttachedToParent = 0x4,
-		DenyChildAttach = 0x8,
-		HideScheduler = 0x10
-	}
+	None = 0,
+	PreferFairness = 1,
+	LongRunning = 2,
+	AttachedToParent = 4,
+	DenyChildAttach = 8,
+	HideScheduler = 0x10
 }

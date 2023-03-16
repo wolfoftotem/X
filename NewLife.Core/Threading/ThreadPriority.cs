@@ -1,15 +1,14 @@
 using System.Runtime.InteropServices;
 
-namespace System.Threading
+namespace System.Threading;
+
+[Serializable]
+[ComVisible(true)]
+public enum ThreadPriority
 {
-	[Serializable]
-	[ComVisible(true)]
-	public enum ThreadPriority
-	{
-		Lowest,
-		BelowNormal,
-		Normal,
-		AboveNormal,
-		Highest
-	}
+	Lowest,
+	BelowNormal,
+	Normal,
+	AboveNormal,
+	Highest
 }

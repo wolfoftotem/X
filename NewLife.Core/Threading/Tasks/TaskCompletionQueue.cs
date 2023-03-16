@@ -1,67 +1,66 @@
 using System.Collections.Concurrent;
 
-namespace System.Threading.Tasks
+namespace System.Threading.Tasks;
+
+internal struct TaskCompletionQueue<TCompletion> where TCompletion : class
 {
-	internal struct TaskCompletionQueue<TCompletion> where TCompletion : class
+	private TCompletion single;
+
+	private ConcurrentOrderedList<TCompletion> completed;
+
+	public bool HasElements
 	{
-		private TCompletion single;
-
-		private ConcurrentOrderedList<TCompletion> completed;
-
-		public bool HasElements
+		get
 		{
-			get
+			if (single == null)
 			{
-				if (single == null)
+				if (completed != null)
 				{
-					if (completed != null)
-					{
-						return completed.Count != 0;
-					}
-					return false;
+					return completed.Count != 0;
 				}
-				return true;
+				return false;
 			}
+			return true;
 		}
+	}
 
-		public void Add(TCompletion continuation)
+	public void Add(TCompletion continuation)
+	{
+		if (single != null || Interlocked.CompareExchange(ref single, continuation, null) != null)
 		{
-			if (single != null || Interlocked.CompareExchange(ref single, continuation, null) != null)
+			if (completed == null)
 			{
-				if (completed == null)
-				{
-					Interlocked.CompareExchange(ref completed, new ConcurrentOrderedList<TCompletion>(), null);
-				}
-				completed.TryAdd(continuation);
+				Interlocked.CompareExchange(ref completed, new ConcurrentOrderedList<TCompletion>(), null);
 			}
+			completed.TryAdd(continuation);
 		}
+	}
 
-		public bool Remove(TCompletion continuation)
+	public bool Remove(TCompletion continuation)
+	{
+		TCompletion val = single;
+		if (val != null && val == continuation && Interlocked.CompareExchange(ref single, null, continuation) == continuation)
 		{
-			TCompletion temp = single;
-			if (temp != null && temp == continuation && Interlocked.CompareExchange(ref single, null, continuation) == continuation)
-			{
-				return true;
-			}
-			if (completed != null)
-			{
-				return completed.TryRemove(continuation);
-			}
-			return false;
+			return true;
 		}
+		if (completed != null)
+		{
+			return completed.TryRemove(continuation);
+		}
+		return false;
+	}
 
-		public bool TryGetNextCompletion(out TCompletion continuation)
+	public bool TryGetNextCompletion(out TCompletion continuation)
+	{
+		continuation = null;
+		if (single != null && (continuation = Interlocked.Exchange(ref single, null)) != null)
 		{
-			continuation = null;
-			if (single != null && (continuation = Interlocked.Exchange(ref single, null)) != null)
-			{
-				return true;
-			}
-			if (completed != null)
-			{
-				return completed.TryPop(out continuation);
-			}
-			return false;
+			return true;
 		}
+		if (completed != null)
+		{
+			return completed.TryPop(out continuation);
+		}
+		return false;
 	}
 }

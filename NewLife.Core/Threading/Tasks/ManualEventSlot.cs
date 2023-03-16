@@ -1,17 +1,16 @@
-namespace System.Threading.Tasks
+namespace System.Threading.Tasks;
+
+internal class ManualEventSlot : IContinuation
 {
-	internal class ManualEventSlot : IContinuation
+	private ManualResetEventSlim evt;
+
+	public ManualEventSlot(ManualResetEventSlim evt)
 	{
-		private ManualResetEventSlim evt;
+		this.evt = evt;
+	}
 
-		public ManualEventSlot(ManualResetEventSlim evt)
-		{
-			this.evt = evt;
-		}
-
-		public void Execute()
-		{
-			evt.Set();
-		}
+	public void Execute()
+	{
+		evt.Set();
 	}
 }

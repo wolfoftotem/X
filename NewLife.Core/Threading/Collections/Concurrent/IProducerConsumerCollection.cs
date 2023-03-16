@@ -1,15 +1,14 @@
 using System.Collections.Generic;
 
-namespace System.Collections.Concurrent
+namespace System.Collections.Concurrent;
+
+public interface IProducerConsumerCollection<T> : IEnumerable<T>, ICollection, IEnumerable
 {
-	public interface IProducerConsumerCollection<T> : IEnumerable<T>, ICollection, IEnumerable
-	{
-		bool TryAdd(T item);
+	bool TryAdd(T item);
 
-		bool TryTake(out T item);
+	bool TryTake(out T item);
 
-		T[] ToArray();
+	T[] ToArray();
 
-		void CopyTo(T[] array, int index);
-	}
+	void CopyTo(T[] array, int index);
 }

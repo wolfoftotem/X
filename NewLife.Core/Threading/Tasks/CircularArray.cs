@@ -1,67 +1,66 @@
 using System.Collections.Generic;
 
-namespace System.Threading.Tasks
+namespace System.Threading.Tasks;
+
+internal class CircularArray<T>
 {
-	internal class CircularArray<T>
+	private readonly int baseSize;
+
+	public readonly int size;
+
+	public readonly T[] segment;
+
+	public long Size => size;
+
+	public T this[long index]
 	{
-		private readonly int baseSize;
-
-		public readonly int size;
-
-		public readonly T[] segment;
-
-		public long Size => size;
-
-		public T this[long index]
+		get
 		{
-			get
-			{
-				return segment[index % size];
-			}
-			set
-			{
-				segment[index % size] = value;
-			}
+			return segment[index % size];
 		}
-
-		public CircularArray(int baseSize)
+		set
 		{
-			this.baseSize = baseSize;
-			size = 1 << baseSize;
-			segment = new T[size];
+			segment[index % size] = value;
 		}
+	}
 
-		public CircularArray<T> Grow(long bottom, long top)
+	public CircularArray(int baseSize)
+	{
+		this.baseSize = baseSize;
+		size = 1 << baseSize;
+		segment = new T[size];
+	}
+
+	public CircularArray<T> Grow(long bottom, long top)
+	{
+		CircularArray<T> circularArray = new CircularArray<T>(baseSize + 1);
+		for (long num = top; num < bottom; num++)
 		{
-			CircularArray<T> grow = new CircularArray<T>(baseSize + 1);
-			for (long i = top; i < bottom; i++)
-			{
-				grow.segment[i] = segment[i % size];
-			}
-			return grow;
+			circularArray.segment[num] = segment[num % size];
 		}
+		return circularArray;
+	}
 
-		public IEnumerable<T> GetEnumerable(long bottom, ref long top)
+	public IEnumerable<T> GetEnumerable(long bottom, ref long top)
+	{
+		long num = top;
+		T[] array = new T[bottom - num];
+		int num2 = -1;
+		for (long num3 = num; num3 < bottom; num3++)
 		{
-			long instantTop = top;
-			T[] slice = new T[bottom - instantTop];
-			int destIndex = -1;
-			for (long i = instantTop; i < bottom; i++)
-			{
-				slice[++destIndex] = segment[i % size];
-			}
-			return RealGetEnumerable(slice, bottom, top, instantTop);
+			array[++num2] = segment[num3 % size];
 		}
+		return RealGetEnumerable(array, bottom, top, num);
+	}
 
-		private IEnumerable<T> RealGetEnumerable(T[] slice, long bottom, long realTop, long initialTop)
+	private IEnumerable<T> RealGetEnumerable(T[] slice, long bottom, long realTop, long initialTop)
+	{
+		int destIndex = (int)(realTop - initialTop - 1);
+		for (long i = realTop; i < bottom; i++)
 		{
-			int destIndex = (int)(realTop - initialTop - 1);
-			for (long i = realTop; i < bottom; i++)
-			{
-				int num;
-				destIndex = (num = destIndex + 1);
-				yield return slice[num];
-			}
+			int num;
+			destIndex = (num = destIndex + 1);
+			yield return slice[num];
 		}
 	}
 }

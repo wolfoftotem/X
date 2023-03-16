@@ -1,17 +1,16 @@
-namespace System.Threading.Tasks
+namespace System.Threading.Tasks;
+
+internal class ActionContinuation : IContinuation
 {
-	internal class ActionContinuation : IContinuation
+	private readonly Action action;
+
+	public ActionContinuation(Action action)
 	{
-		private readonly Action action;
+		this.action = action;
+	}
 
-		public ActionContinuation(Action action)
-		{
-			this.action = action;
-		}
-
-		public void Execute()
-		{
-			action();
-		}
+	public void Execute()
+	{
+		action();
 	}
 }
