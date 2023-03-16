@@ -33,7 +33,7 @@ public class Program
             try
             {
 #endif
-            Test2();
+            Test3();
 #if !DEBUG
             }
             catch (Exception ex)
@@ -122,94 +122,21 @@ public class Program
 
     static void Test3()
     {
-    }
+        var svr = new NetServer(3388);
+        svr.Log = XTrace.Log;
+        svr.SessionLog = XTrace.Log;
+        svr.SocketLog = XTrace.Log;
 
-    static UdpServer _udpServer;
-    static void Test5()
-    {
-        if (_udpServer != null) return;
-
-        _udpServer = new UdpServer();
-        _udpServer.Port = 888;
-        //_udpServer.Received += _udpServer_Received;
-        _udpServer.SessionTimeout = 5000;
-        _udpServer.Open();
-
-        var session = _udpServer.CreateSession(new IPEndPoint(IPAddress.Any, 0));
-        for (int i = 0; i < 5; i++)
+        svr.Received += (s, e) =>
         {
-            var buf = session.Receive();
-            Console.WriteLine(buf.ToHex());
-            session.Send("Hello");
-        }
+            XTrace.WriteLine(e.Packet.ToStr());
 
-        //Console.ReadKey();
-        _udpServer.Dispose();
-        _udpServer = null;
-    }
-
-    static void _udpServer_Received(object sender, ReceivedEventArgs e)
-    {
-        var session = sender as ISocketSession;
-        var pk = e.Packet;
-        XTrace.WriteLine("{0} [{1}]：{2}", session.Remote, pk.Total, pk.ToHex());
-    }
-
-    static void Test4()
-    {
-    }
-
-    static Int32 success = 0;
-    static Int32 total = 0;
-    static void GetMac(Object state)
-    {
-        var ip = IPAddress.Parse("192.168.0." + state);
-        var mac = ip.GetMac();
-        if (mac != null)
-        {
-            success++;
-            Console.WriteLine("{0}\t{1}", ip, mac.ToHex("-"));
-        }
-        total++;
-    }
-
-    static void Test6()
-    {
-        // UDP没有客户端服务器之分。推荐使用NetUri指定服务器地址
-        var udp = new UdpServer();
-        udp.Remote = new NetUri("udp://smart.peacemoon.cn:7");
-        udp.Received += (s, e) =>
-        {
-            XTrace.WriteLine("收到：{0}", e.Packet.ToStr());
+            if (s is INetSession ss) ss.Send(e.Packet);
         };
-        udp.Open();
-        udp.Send("新生命团队");
-        udp.Send("学无先后达者为师！");
 
-        // Tcp客户端会话。改用传统方式指定服务器地址
-        var tcp = new TcpSession();
-        tcp.Remote.Host = "smart.peacemoon.cn";
-        tcp.Remote.Port = 13;
-        tcp.Open();
-        var str = tcp.ReceiveString();
-        XTrace.WriteLine(str);
+        svr.Start();
 
-        // 产品级客户端用法。直接根据NetUri创建相应客户端
-        var client = new NetUri("tcp://smart.peacemoon.cn:17").CreateRemote();
-        client.Received += (s, e) =>
-        {
-            XTrace.WriteLine("收到：{0}", e.Packet.ToStr());
-        };
-        client.Open();
-
-        Thread.Sleep(1000);
-    }
-
-    static void Test7()
-    {
-        //TestNewLife_Net test = new TestNewLife_Net();
-        //test.StartTest();
-        //test.StopTest();
+        Console.ReadLine();
     }
 
     private static void Test8()
@@ -232,6 +159,9 @@ public class Program
         // 入门级UDP服务器，直接收数据
         var udp = new UdpServer(3388);
         udp.Received += onReceive;
+        udp.Log = XTrace.Log;
+        udp.LogSend = true;
+        udp.LogReceive = true;
         udp.Open();
 
         // 入门级TCP服务器，先接收会话连接，然后每个连接再分开接收数据
@@ -241,12 +171,20 @@ public class Program
             XTrace.WriteLine("新连接 {0}", e.Session);
             e.Session.Received += onReceive;
         };
+        tcp.Log = XTrace.Log;
+        tcp.LogSend = true;
+        tcp.LogReceive = true;
         tcp.Start();
 
         // 轻量级应用服务器（不建议作为产品级使用），同时在TCP/TCPv6/UDP/UDPv6监听指定端口，统一事件接收数据
         var svr = new NetServer();
         svr.Port = 3377;
         svr.Received += onReceive;
+        svr.Log = XTrace.Log;
+        svr.SessionLog = XTrace.Log;
+        svr.SocketLog = XTrace.Log;
+        svr.LogSend = true;
+        svr.LogReceive = true;
         svr.Start();
 
         Console.WriteLine();
@@ -262,6 +200,9 @@ public class Program
         // TCP客户端设置AutoReconnect指定断线自动重连次数，默认3次。
         foreach (var item in clients)
         {
+            item.Log = XTrace.Log;
+            item.LogSend = true;
+            item.LogReceive = true;
             item.Open();
         }
 
