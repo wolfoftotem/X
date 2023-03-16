@@ -1,67 +1,22 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="Current">
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProductVersion>8.0.30703</ProductVersion>
-    <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{6740B4CD-B2F6-49DF-BDA0-7DC17144C666}</ProjectGuid>
     <OutputType>Exe</OutputType>
-    <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Test</RootNamespace>
-    <AssemblyName>Test</AssemblyName>
-    <FileAlignment>512</FileAlignment>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <OutputPath>..\..\Test4\</OutputPath>
-    <DefineConstants>TRACE;DEBUG;NET4</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <PlatformTarget>AnyCPU</PlatformTarget>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>pdbonly</DebugType>
-    <Optimize>true</Optimize>
-    <OutputPath>..\..\Test4\</OutputPath>
-    <DefineConstants>TRACE;NET4</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <PlatformTarget>AnyCPU</PlatformTarget>
-    <UseVSHostingProcess>true</UseVSHostingProcess>
+    <TargetFramework>net20</TargetFramework>
+    <OutputPath>..\BinTest\</OutputPath>
+    <LangVersion>latest</LangVersion>
+    <Version>1.0.0.1130</Version>
+    <FileVersion>1.0.0.1130</FileVersion>
+    <AssemblyVersion>1.0.*</AssemblyVersion>
+    <Deterministic>false</Deterministic>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <NoWarn>1701;1702;NU5104;NETSDK1138;CS7035</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Microsoft.VisualBasic" />
-    <Reference Include="System" />
-    <Reference Include="System.Configuration" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Management" />
-    <Reference Include="System.Web" />
-    <Reference Include="System.Xml" />
+    <Compile Remove="Entity\**" />
+    <EmbeddedResource Remove="Entity\**" />
+    <None Remove="Entity\**" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Program.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
+    <ProjectReference Include="..\NewLife.Core\NewLife.Core.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\NewLife.Core\NewLife.Core.csproj">
-      <Project>{5813C22E-EEB3-4DEE-A45C-BB218041193A}</Project>
-      <Name>NewLife.Core</Name>
-    </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="App.config">
-      <SubType>Designer</SubType>
-    </None>
-  </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
-       Other similar extension points exist, see Microsoft.Common.targets.
-  <Target Name="BeforeBuild">
-  </Target>
-  <Target Name="AfterBuild">
-  </Target>
-  -->
 </Project>
