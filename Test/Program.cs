@@ -60,14 +60,14 @@ public class Program
         var client = new TinyHttpClient("http://star.newlifex.com:6600");
 
         var html = client.GetString("http://newlifex.com");
-        //XTrace.WriteLine(html);
+        XTrace.WriteLine(html);
 
         var rs = await client.GetAsync<Object>("api", new { state = 1234 });
         XTrace.WriteLine(rs.ToJson(true));
 
-        //var rs2 = await client.PostAsync<Object>("node/ping", new { state = 1234 });
-        ////var rs2 = await client.InvokeAsync<Object>("option", "api", new { state = 1234 });
-        //XTrace.WriteLine(rs2.ToJson(true));
+        var rs2 = await client.PostAsync<Object>("node/ping", new { state = 1234 });
+        //var rs2 = await client.InvokeAsync<Object>("option", "api", new { state = 1234 });
+        XTrace.WriteLine(rs2.ToJson(true));
     }
 
     static void Test2()

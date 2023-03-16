@@ -68,8 +68,8 @@ namespace System
             Action methodAccessor = GetMethodAccessor<Action>(ref storage, methodName, true);
             if (methodAccessor == null)
             {
-                throw new InvalidOperationException();
-            }
+                //throw new InvalidOperationException();
+            }else
             methodAccessor.Invoke();
         }
 
