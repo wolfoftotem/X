@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
-using System.Net.Http.Headers;
+using System.Net.Http;
+using NewLife.Http.Headers;
 using NewLife.Log;
 using NewLife.Remoting;
 using NewLife.Security;
@@ -64,7 +65,7 @@ public class TokenHttpFilter : IHttpFilter
     /// <returns></returns>
     public virtual async Task OnRequest(HttpClient client, HttpRequestMessage request, Object state)
     {
-        if (request.Headers.Authorization != null) return;
+        if (request.Headers.ContainsKey("Authorization")) return;
 
         var path = client.BaseAddress == null ? request.RequestUri.AbsoluteUri : request.RequestUri.OriginalString;
         if (path.StartsWithIgnoreCase(Action.EnsureStart("/"))) return;
@@ -102,7 +103,7 @@ public class TokenHttpFilter : IHttpFilter
         {
             var type = Token.TokenType;
             if (type.IsNullOrEmpty() || type.EqualIgnoreCase("Token", "JWT")) type = "Bearer";
-            request.Headers.Authorization = new AuthenticationHeaderValue(type, Token.AccessToken);
+            request.Headers["Authorization"] = $"{type} {Token.AccessToken}";
         }
     }
 
@@ -180,7 +181,7 @@ public class TokenHttpFilter : IHttpFilter
         }
 
 #if NET40
-            return TaskEx.FromResult(0);
+        return TaskEx.FromResult(0);
 #elif NET45
             return Task.FromResult(0);
 #else
@@ -203,7 +204,7 @@ public class TokenHttpFilter : IHttpFilter
         }
 
 #if NET40
-            return TaskEx.FromResult(0);
+        return TaskEx.FromResult(0);
 #elif NET45
             return Task.FromResult(0);
 #else

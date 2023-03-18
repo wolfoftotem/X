@@ -2,7 +2,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net20</TargetFramework>
-    <OutputPath>..\BinTest\</OutputPath>
+    <OutputPath>..\Bin\Test20\</OutputPath>
     <LangVersion>latest</LangVersion>
     <Version>1.0.0.1130</Version>
     <FileVersion>1.0.0.1130</FileVersion>

@@ -107,8 +107,6 @@
     <Compile Remove="Compression\SevenZipFilePart.cs" />
     <Compile Remove="Http\HttpHelper.cs" />
     <Compile Remove="Http\HttpTraceHandler.cs" />
-    <Compile Remove="Http\IHttpFilter.cs" />
-    <Compile Remove="Http\TokenHttpFilter.cs" />
     <Compile Remove="IOModel\HttpStreamClient.cs" />
     <Compile Remove="IOModel\IStreamHandler.cs" />
     <Compile Remove="IOModel\StreamClient.cs" />

@@ -7,6 +7,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Web;
 using NewLife.Collections;
 using NewLife.Data;
+using NewLife.Http.Headers;
 using NewLife.Log;
 using NewLife.Net;
 using NewLife.Reflection;
@@ -143,7 +144,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
     public virtual async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request)
     {
         // 构造请求
-        var uri = request.Url;
+        var uri = request.RequestUri;
         //var req = BuildRequest(uri, request.Body);
         var req = request.Build();
 
@@ -174,7 +175,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
                     if (uri.Host != uri2.Host || uri.Scheme != uri2.Scheme) Close();
 
                     uri = uri2;
-                    request.Url = uri;
+                    request.RequestUri = uri;
                     req = request.Build();
 
                     continue;
@@ -348,7 +349,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
     public virtual HttpResponseMessage Send(HttpRequestMessage request)
     {
         // 构造请求
-        var uri = request.Url;
+        var uri = request.RequestUri;
         var req = request.Build();
 
         var res = new HttpResponseMessage();
@@ -378,7 +379,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
                     // 重建请求头，因为Uri改变后，头部字段也可能改变
                     uri = uri2;
                     //req = BuildRequest(uri, data);
-                    request.Url = uri;
+                    request.RequestUri = uri;
                     req = request.Build();
 
                     continue;
@@ -596,7 +597,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
     {
         var request = new HttpRequestMessage
         {
-            Url = new Uri(url),
+            RequestUri = new Uri(url),
         };
 
         var rs = (await SendAsync(request).ConfigureAwait(false));
@@ -610,7 +611,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
     {
         var request = new HttpRequestMessage
         {
-            Url = new Uri(url),
+            RequestUri = new Uri(url),
         };
 
         var rs = Send(request);
@@ -682,7 +683,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
         var req = new HttpRequestMessage
         {
             Method = method.ToUpper(),
-            Url = new Uri(BaseAddress, action),
+            RequestUri = new Uri(BaseAddress, action),
             KeepAlive = KeepAlive,
 
             ContentType = headers.ContentType,
@@ -707,7 +708,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
                 sb.AppendFormat("{0}={1}", item.Key, HttpUtility.UrlEncode(v));
             }
 
-            req.Url = new Uri(BaseAddress, sb.Put(true));
+            req.RequestUri = new Uri(BaseAddress, sb.Put(true));
         }
 
         return req;
