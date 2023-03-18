@@ -72,9 +72,9 @@ public static class ApiHelper
 
         // 指定返回类型
         if (returnType == typeof(Byte[]) || returnType == typeof(Packet))
-            request.Headers["Accept"] = "application/octet-stream";
+            request["Accept"] = "application/octet-stream";
         else
-            request.Headers["Accept"] = "application/json";
+            request["Accept"] = "application/json";
 
         // 可能附加头部
         onRequest?.Invoke(request);

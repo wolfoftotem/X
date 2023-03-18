@@ -167,7 +167,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
             // 跳转
             if (res.StatusCode is HttpStatusCode.Moved or HttpStatusCode.Redirect)
             {
-                if (res.Headers.TryGetValue("Location", out var location) && !location.IsNullOrEmpty())
+                if (res.TryGetValue("Location", out var location) && !location.IsNullOrEmpty())
                 {
                     // 再次请求
                     var uri2 = new Uri(location);
@@ -203,7 +203,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
         }
 
         // chunk编码
-        if (rs.Count > 0 && res.Headers.TryGetValue("Transfer-Encoding", out var s) && s.EqualIgnoreCase("chunked"))
+        if (rs.Count > 0 && res.TryGetValue("Transfer-Encoding", out var s) && s.EqualIgnoreCase("chunked"))
         {
             res.Body = await ReadChunkAsync(rs);
         }
@@ -369,7 +369,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
             // 跳转
             if (res.StatusCode is HttpStatusCode.Moved or HttpStatusCode.Redirect)
             {
-                if (res.Headers.TryGetValue("Location", out var location) && !location.IsNullOrEmpty())
+                if (res.TryGetValue("Location", out var location) && !location.IsNullOrEmpty())
                 {
                     // 再次请求
                     var uri2 = new Uri(location);
@@ -407,7 +407,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
         }
 
         // chunk编码
-        if (rs.Count > 0 && res.Headers.TryGetValue("Transfer-Encoding", out var s) && s.EqualIgnoreCase("chunked"))
+        if (rs.Count > 0 && res.TryGetValue("Transfer-Encoding", out var s) && s.EqualIgnoreCase("chunked"))
         {
             res.Body = ReadChunk(rs);
         }

@@ -73,11 +73,11 @@ namespace NewLife.Http
 
             // 内容长度
             if (length > 0)
-                Headers["Content-Length"] = length + "";
+                this["Content-Length"] = length + "";
             else if (!Headers.ContainsKey("Transfer-Encoding"))
-                Headers["Content-Length"] = "0";
+                this["Content-Length"] = "0";
 
-            if (!ContentType.IsNullOrEmpty()) Headers["Content-Type"] = ContentType;
+            if (!ContentType.IsNullOrEmpty()) this["Content-Type"] = ContentType;
 
             foreach (var item in Headers)
             {

@@ -1,5 +1,4 @@
-﻿using System.Net;
-using System.Net.Http;
+﻿using System.Net.Http;
 using System.Runtime.Serialization;
 using System.Xml.Serialization;
 using NewLife.Configuration;
@@ -21,8 +20,8 @@ public class ApiHttpClient : DisposeBase, IApiClient, IConfigMapping, ILogFeatur
     /// <summary>超时时间。默认15000ms</summary>
     public Int32 Timeout { get; set; } = 15_000;
 
-    /// <summary>是否使用系统代理设置。默认false不检查系统代理设置，在某些系统上可以大大改善初始化速度</summary>
-    public Boolean UseProxy { get; set; }
+    ///// <summary>是否使用系统代理设置。默认false不检查系统代理设置，在某些系统上可以大大改善初始化速度</summary>
+    //public Boolean UseProxy { get; set; }
 
     /// <summary>是否使用压缩。默认true</summary>
     /// <remarks>将来可能取消该设置项，默认启用压缩</remarks>
@@ -244,15 +243,15 @@ public class ApiHttpClient : DisposeBase, IApiClient, IConfigMapping, ILogFeatur
 
         // 指定返回类型
         if (returnType == typeof(Byte[]) || returnType == typeof(Packet))
-            request.Headers["Accept"] = "application/octet-stream";
+            request["Accept"] = "application/octet-stream";
         else
-            request.Headers["Accept"] = "application/json";
+            request["Accept"] = "application/json";
 
         //// 压缩
         //if (Compressed) request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));
 
         // 加上令牌或其它身份验证
-        if (!Token.IsNullOrEmpty()) request.Headers["Authorization"] = Token.Contains(" ") ? Token : $"Bearer {Token}";
+        if (!Token.IsNullOrEmpty()) request["Authorization"] = Token.Contains(" ") ? Token : $"Bearer {Token}";
 
         return request;
     }

@@ -39,16 +39,16 @@ namespace NewLife.Http
         public static WebSocket Handshake(IHttpContext context)
         {
             var request = context.Request;
-            if (!request.Headers.TryGetValue("Sec-WebSocket-Key", out var key) || key.IsNullOrEmpty()) return null;
+            if (!request.TryGetValue("Sec-WebSocket-Key", out var key) || key.IsNullOrEmpty()) return null;
 
             var buf = SHA1.Create().ComputeHash((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").GetBytes());
             key = buf.ToBase64();
 
             var response = context.Response;
             response.StatusCode = HttpStatusCode.SwitchingProtocols;
-            response.Headers["Upgrade"] = "websocket";
-            response.Headers["Connection"] = "Upgrade";
-            response.Headers["Sec-WebSocket-Accept"] = key;
+            response["Upgrade"] = "websocket";
+            response["Connection"] = "Upgrade";
+            response["Sec-WebSocket-Accept"] = key;
 
             var manager = new WebSocket
             {
@@ -58,7 +58,7 @@ namespace NewLife.Http
             };
             if (context is DefaultHttpContext dhc) dhc.WebSocket = manager;
 
-            if (request.Headers.TryGetValue("Sec-WebSocket-Version", out var ver)) manager.Version = ver;
+            if (request.TryGetValue("Sec-WebSocket-Version", out var ver)) manager.Version = ver;
 
             return manager;
         }

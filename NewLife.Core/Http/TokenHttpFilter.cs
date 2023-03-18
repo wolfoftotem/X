@@ -65,7 +65,7 @@ public class TokenHttpFilter : IHttpFilter
     /// <returns></returns>
     public virtual async Task OnRequest(HttpClient client, HttpRequestMessage request, Object state)
     {
-        if (request.Headers.ContainsKey("Authorization")) return;
+        if (request.TryGetValue("Authorization", out _)) return;
 
         var path = client.BaseAddress == null ? request.RequestUri.AbsoluteUri : request.RequestUri.OriginalString;
         if (path.StartsWithIgnoreCase(Action.EnsureStart("/"))) return;
@@ -103,7 +103,7 @@ public class TokenHttpFilter : IHttpFilter
         {
             var type = Token.TokenType;
             if (type.IsNullOrEmpty() || type.EqualIgnoreCase("Token", "JWT")) type = "Bearer";
-            request.Headers["Authorization"] = $"{type} {Token.AccessToken}";
+            request["Authorization"] = $"{type} {Token.AccessToken}";
         }
     }
 

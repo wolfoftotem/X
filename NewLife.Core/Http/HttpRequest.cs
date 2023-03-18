@@ -40,8 +40,8 @@ public class HttpRequest : HttpBase
             Version = ss[2].TrimStart("HTTP/");
         }
 
-        Host = Headers["Host"];
-        KeepAlive = Headers["Connection"].EqualIgnoreCase("keep-alive");
+        Host = this["Host"];
+        KeepAlive = this["Connection"].EqualIgnoreCase("keep-alive");
 
         return true;
     }
@@ -105,10 +105,10 @@ public class HttpRequest : HttpBase
         sb.AppendFormat("Host: {0}\r\n", Host);
 
         // 内容长度
-        if (length > 0) Headers["Content-Length"] = length + "";
-        if (!ContentType.IsNullOrEmpty()) Headers["Content-Type"] = ContentType;
+        if (length > 0) this["Content-Length"] = length + "";
+        if (!ContentType.IsNullOrEmpty()) this["Content-Type"] = ContentType;
 
-        if (KeepAlive) Headers["Connection"] = "keep-alive";
+        if (KeepAlive) this["Connection"] = "keep-alive";
 
         foreach (var item in Headers)
         {

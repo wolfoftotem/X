@@ -100,10 +100,10 @@ namespace NewLife.Http
                 if (rs != null)
                 {
                     var server = (this as INetSession).Host as HttpServer;
-                    if (!server.ServerName.IsNullOrEmpty() && !rs.Headers.ContainsKey("Server")) rs.Headers["Server"] = server.ServerName;
+                    if (!server.ServerName.IsNullOrEmpty()) rs.TryAdd("Server", server.ServerName);
 
                     var closing = !req.KeepAlive && _websocket == null;
-                    if (closing && !rs.Headers.ContainsKey("Connection")) rs.Headers["Connection"] = "close";
+                    if (closing) rs.TryAdd("Connection", "close");
 
                     Send(rs.Build());
 
