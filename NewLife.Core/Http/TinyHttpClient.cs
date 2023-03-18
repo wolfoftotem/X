@@ -148,69 +148,78 @@ public class TinyHttpClient : DisposeBase, IApiClient
         if (!uri.IsAbsoluteUri) uri = request.RequestUri = new Uri(BaseAddress, uri);
         var req = request.Build();
 
-        var res = new HttpResponseMessage();
-        Packet rs = null;
-        var retry = 5;
-        while (retry-- > 0)
+        using var span = Tracer?.NewSpan(request);
+        try
         {
-            // 发出请求
-            rs = await SendDataAsync(uri, req).ConfigureAwait(false);
-            if (rs == null || rs.Count == 0) return null;
-
-            // 解析响应
-            if (!res.Parse(rs)) throw new HttpParseException();
-            rs = res.Body;
-
-            // 跳转
-            if (res.StatusCode is HttpStatusCode.Moved or HttpStatusCode.Redirect)
+            var res = new HttpResponseMessage();
+            Packet rs = null;
+            var retry = 5;
+            while (retry-- > 0)
             {
-                if (res.TryGetValue("Location", out var location) && !location.IsNullOrEmpty())
+                // 发出请求
+                rs = await SendDataAsync(uri, req).ConfigureAwait(false);
+                if (rs == null || rs.Count == 0) return null;
+
+                // 解析响应
+                if (!res.Parse(rs)) throw new HttpParseException();
+                rs = res.Body;
+
+                // 跳转
+                if (res.StatusCode is HttpStatusCode.Moved or HttpStatusCode.Redirect)
                 {
-                    // 再次请求
-                    var uri2 = new Uri(location);
+                    if (res.TryGetValue("Location", out var location) && !location.IsNullOrEmpty())
+                    {
+                        // 再次请求
+                        var uri2 = new Uri(location);
 
-                    if (uri.Host != uri2.Host || uri.Scheme != uri2.Scheme) Close();
+                        if (uri.Host != uri2.Host || uri.Scheme != uri2.Scheme) Close();
 
-                    uri = uri2;
-                    request.RequestUri = uri;
-                    req = request.Build();
+                        uri = uri2;
+                        request.RequestUri = uri;
+                        req = request.Build();
 
-                    continue;
+                        continue;
+                    }
+                }
+
+                break;
+            }
+
+            if (res.StatusCode != HttpStatusCode.OK) throw new Exception($"{(Int32)res.StatusCode} {res.StatusDescription}");
+
+            // 如果没有收完数据包
+            if (res.ContentLength > 0 && rs.Count < res.ContentLength)
+            {
+                var total = rs.Total;
+                var last = rs;
+                while (total < res.ContentLength)
+                {
+                    var pk = await SendDataAsync(null, null).ConfigureAwait(false);
+                    last.Append(pk);
+
+                    last = pk;
+                    total += pk.Total;
                 }
             }
 
-            break;
-        }
-
-        if (res.StatusCode != HttpStatusCode.OK) throw new Exception($"{(Int32)res.StatusCode} {res.StatusDescription}");
-
-        // 如果没有收完数据包
-        if (res.ContentLength > 0 && rs.Count < res.ContentLength)
-        {
-            var total = rs.Total;
-            var last = rs;
-            while (total < res.ContentLength)
+            // chunk编码
+            if (rs.Count > 0 && res.TryGetValue("Transfer-Encoding", out var s) && s.EqualIgnoreCase("chunked"))
             {
-                var pk = await SendDataAsync(null, null).ConfigureAwait(false);
-                last.Append(pk);
-
-                last = pk;
-                total += pk.Total;
+                res.Body = await ReadChunkAsync(rs);
             }
-        }
 
-        // chunk编码
-        if (rs.Count > 0 && res.TryGetValue("Transfer-Encoding", out var s) && s.EqualIgnoreCase("chunked"))
+            res.SetContent();
+
+            // 断开连接
+            if (!KeepAlive) Close();
+
+            return res;
+        }
+        catch (Exception ex)
         {
-            res.Body = await ReadChunkAsync(rs);
+            span?.SetError(ex, null);
+            throw;
         }
-
-        res.SetContent();
-
-        // 断开连接
-        if (!KeepAlive) Close();
-
-        return res;
     }
 
     /// <summary>读取分片，返回链式Packet</summary>
@@ -352,71 +361,80 @@ public class TinyHttpClient : DisposeBase, IApiClient
         if (!uri.IsAbsoluteUri) uri = request.RequestUri = new Uri(BaseAddress, uri);
         var req = request.Build();
 
-        var res = new HttpResponseMessage();
-        Packet rs = null;
-        var retry = 5;
-        while (retry-- > 0)
+        using var span = Tracer?.NewSpan(request);
+        try
         {
-            // 发出请求
-            rs = SendData(uri, req);
-            if (rs == null || rs.Count == 0) return null;
-
-            // 解析响应
-            if (!res.Parse(rs)) throw new HttpParseException();
-            rs = res.Body;
-
-            // 跳转
-            if (res.StatusCode is HttpStatusCode.Moved or HttpStatusCode.Redirect)
+            var res = new HttpResponseMessage();
+            Packet rs = null;
+            var retry = 5;
+            while (retry-- > 0)
             {
-                if (res.TryGetValue("Location", out var location) && !location.IsNullOrEmpty())
+                // 发出请求
+                rs = SendData(uri, req);
+                if (rs == null || rs.Count == 0) return null;
+
+                // 解析响应
+                if (!res.Parse(rs)) throw new HttpParseException();
+                rs = res.Body;
+
+                // 跳转
+                if (res.StatusCode is HttpStatusCode.Moved or HttpStatusCode.Redirect)
                 {
-                    // 再次请求
-                    var uri2 = new Uri(location);
+                    if (res.TryGetValue("Location", out var location) && !location.IsNullOrEmpty())
+                    {
+                        // 再次请求
+                        var uri2 = new Uri(location);
 
-                    if (uri.Host != uri2.Host || uri.Scheme != uri2.Scheme) Close();
+                        if (uri.Host != uri2.Host || uri.Scheme != uri2.Scheme) Close();
 
-                    // 重建请求头，因为Uri改变后，头部字段也可能改变
-                    uri = uri2;
-                    //req = BuildRequest(uri, data);
-                    request.RequestUri = uri;
-                    req = request.Build();
+                        // 重建请求头，因为Uri改变后，头部字段也可能改变
+                        uri = uri2;
+                        //req = BuildRequest(uri, data);
+                        request.RequestUri = uri;
+                        req = request.Build();
 
-                    continue;
+                        continue;
+                    }
+                }
+
+                break;
+            }
+
+            if (res.StatusCode != HttpStatusCode.OK) throw new Exception($"{(Int32)res.StatusCode} {res.StatusDescription}");
+
+            // 如果没有收完数据包
+            if (res.ContentLength > 0 && rs.Count < res.ContentLength)
+            {
+                var total = rs.Total;
+                var last = rs;
+                while (total < res.ContentLength)
+                {
+                    var pk = SendData(null, null);
+                    last.Append(pk);
+
+                    last = pk;
+                    total += pk.Total;
                 }
             }
 
-            break;
-        }
-
-        if (res.StatusCode != HttpStatusCode.OK) throw new Exception($"{(Int32)res.StatusCode} {res.StatusDescription}");
-
-        // 如果没有收完数据包
-        if (res.ContentLength > 0 && rs.Count < res.ContentLength)
-        {
-            var total = rs.Total;
-            var last = rs;
-            while (total < res.ContentLength)
+            // chunk编码
+            if (rs.Count > 0 && res.TryGetValue("Transfer-Encoding", out var s) && s.EqualIgnoreCase("chunked"))
             {
-                var pk = SendData(null, null);
-                last.Append(pk);
-
-                last = pk;
-                total += pk.Total;
+                res.Body = ReadChunk(rs);
             }
-        }
 
-        // chunk编码
-        if (rs.Count > 0 && res.TryGetValue("Transfer-Encoding", out var s) && s.EqualIgnoreCase("chunked"))
+            res.SetContent();
+
+            // 断开连接
+            if (!KeepAlive) Close();
+
+            return res;
+        }
+        catch (Exception ex)
         {
-            res.Body = ReadChunk(rs);
+            span?.SetError(ex, null);
+            throw;
         }
-
-        res.SetContent();
-
-        // 断开连接
-        if (!KeepAlive) Close();
-
-        return res;
     }
 
     /// <summary>读取分片，返回链式Packet</summary>
@@ -602,7 +620,11 @@ public class TinyHttpClient : DisposeBase, IApiClient
         };
 
         var rs = (await SendAsync(request).ConfigureAwait(false));
-        return rs?.Body?.ToStr();
+        if (rs == null) return null;
+
+        rs.EnsureSuccessStatusCode();
+
+        return rs.Body?.ToStr();
     }
 
     /// <summary>同步获取</summary>
@@ -617,6 +639,21 @@ public class TinyHttpClient : DisposeBase, IApiClient
 
         var rs = Send(request);
         return rs?.Body?.ToStr();
+    }
+
+    public async Task<Stream> GetStreamAsync(String url)
+    {
+        var request = new HttpRequestMessage
+        {
+            RequestUri = new Uri(url),
+        };
+
+        var rs = (await SendAsync(request).ConfigureAwait(false));
+        if (rs == null) return null;
+
+        rs.EnsureSuccessStatusCode();
+
+        return await rs.Content.ReadAsStreamAsync(default);
     }
     #endregion
 
@@ -689,6 +726,9 @@ public class TinyHttpClient : DisposeBase, IApiClient
 
             ContentType = headers.ContentType,
         };
+
+        if (!headers.Accept.IsNullOrEmpty()) req["Accept"] = headers.Accept;
+        if (!headers.UserAgent.IsNullOrEmpty()) req["User-Agent"] = headers.UserAgent;
 
         var ps = args.ToDictionary();
         if (method.EqualIgnoreCase("POST"))

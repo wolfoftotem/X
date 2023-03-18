@@ -105,7 +105,6 @@
     <Compile Remove="Compression\SevenZip.cs" />
     <Compile Remove="Compression\SevenZipEntry.cs" />
     <Compile Remove="Compression\SevenZipFilePart.cs" />
-    <Compile Remove="Http\HttpHelper.cs" />
     <Compile Remove="Http\HttpTraceHandler.cs" />
     <Compile Remove="IOModel\HttpStreamClient.cs" />
     <Compile Remove="IOModel\IStreamHandler.cs" />

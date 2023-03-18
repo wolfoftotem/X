@@ -10,6 +10,8 @@ public abstract class HttpContent
 
     public virtual async Task<String> ReadAsStringAsync(CancellationToken cancellationToken) => (await ReadAsByteArrayAsync(cancellationToken)).ToStr();
 
+    public virtual async Task<Stream> ReadAsStreamAsync(CancellationToken cancellationToken) => new MemoryStream(await ReadAsByteArrayAsync(cancellationToken));
+
     public virtual Task<Byte[]> ReadAsByteArrayAsync() => ReadAsByteArrayAsync(default);
 
     public abstract Task<Byte[]> ReadAsByteArrayAsync(CancellationToken cancellationToken);

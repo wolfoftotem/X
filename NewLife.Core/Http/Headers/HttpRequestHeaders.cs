@@ -7,4 +7,6 @@ public class HttpRequestHeaders
     public String ContentType { get; set; }
 
     public String UserAgent { get; set; }
+
+    public String Accept { get; set; }
 }
