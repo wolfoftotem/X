@@ -145,10 +145,8 @@ public class TinyHttpClient : DisposeBase, IApiClient
     {
         // 构造请求
         var uri = request.RequestUri;
-        //var req = BuildRequest(uri, request.Body);
+        if (!uri.IsAbsoluteUri) uri = request.RequestUri = new Uri(BaseAddress, uri);
         var req = request.Build();
-
-        //StatusCode = -1;
 
         var res = new HttpResponseMessage();
         Packet rs = null;
@@ -207,6 +205,8 @@ public class TinyHttpClient : DisposeBase, IApiClient
         {
             res.Body = await ReadChunkAsync(rs);
         }
+
+        res.SetContent();
 
         // 断开连接
         if (!KeepAlive) Close();
@@ -350,6 +350,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
     {
         // 构造请求
         var uri = request.RequestUri;
+        if (!uri.IsAbsoluteUri) uri = request.RequestUri = new Uri(BaseAddress, uri);
         var req = request.Build();
 
         var res = new HttpResponseMessage();
@@ -411,6 +412,8 @@ public class TinyHttpClient : DisposeBase, IApiClient
         {
             res.Body = ReadChunk(rs);
         }
+
+        res.SetContent();
 
         // 断开连接
         if (!KeepAlive) Close();

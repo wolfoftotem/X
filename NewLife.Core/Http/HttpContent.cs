@@ -4,7 +4,7 @@ namespace NewLife.Http;
 
 public abstract class HttpContent
 {
-    public HttpContentHeaders Headers { get; set; }
+    public HttpContentHeaders Headers { get; set; } = new();
 
     public virtual Task<String> ReadAsStringAsync() => ReadAsStringAsync(default);
 

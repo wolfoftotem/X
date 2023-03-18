@@ -32,7 +32,7 @@ public class Program
             sw.Start();
             try
             {
-                Test1();
+                Test4();
             }
             catch (Exception ex)
             {
@@ -140,6 +140,22 @@ public class Program
         svr.Start();
 
         Console.ReadLine();
+    }
+
+    static async void Test4()
+    {
+        var test = new ApiHttpClientTests();
+        await test.BasicTest();
+        await test.InfoTest();
+        await test.ErrorTest();
+
+        await test.TokenTest("12345678", "ABCDEFG");
+        await test.TokenTest("ABCDEFG", "12345678");
+
+        test.SlaveTest();
+        await test.SlaveAsyncTest();
+        await test.RoundRobinTest();
+        await test.FilterTest();
     }
 
     private static void Test8()

@@ -234,17 +234,35 @@ namespace NewLife.Http
             if (ss.Length < 3) return false;
 
             // 第二段是地址
-            var url = ss[1];
-            p = url.IndexOf('?');
-            if (p > 0)
+            var uri = new Uri(ss[1], UriKind.RelativeOrAbsolute);
+            if (!uri.IsAbsoluteUri)
             {
-                action = url.Substring(1, p - 1);
-                value = url.Substring(p + 1).GetBytes();
+                var url = ss[1];
+                p = url.IndexOf('?');
+                if (p > 0)
+                {
+                    action = url.Substring(1, p);
+                    value = url.Substring(p + 1).GetBytes();
+                }
+                else
+                {
+                    action = url.Substring(1);
+                    value = http.Payload;
+                }
             }
             else
             {
-                action = url.Substring(1);
-                value = http.Payload;
+                if (!uri.Query.IsNullOrEmpty())
+                {
+                    action = uri.AbsolutePath;
+                    value = uri.Query.GetBytes();
+                }
+                else
+                {
+                    action = uri.AbsolutePath;
+                    value = http.Payload;
+                }
+                if (action.Length > 1) action = action.Substring(1);
             }
 
             return true;
