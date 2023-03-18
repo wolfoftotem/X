@@ -718,7 +718,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
     public HttpRequestMessage CreateRequest(String method, String action, Object args)
     {
         var headers = DefaultRequestHeaders;
-        var req = new HttpRequestMessage
+        var request = new HttpRequestMessage
         {
             Method = method.ToUpper(),
             RequestUri = new Uri(BaseAddress, action),
@@ -727,12 +727,15 @@ public class TinyHttpClient : DisposeBase, IApiClient
             ContentType = headers.ContentType,
         };
 
-        if (!headers.Accept.IsNullOrEmpty()) req["Accept"] = headers.Accept;
-        if (!headers.UserAgent.IsNullOrEmpty()) req["User-Agent"] = headers.UserAgent;
+        if (!headers.Accept.IsNullOrEmpty()) request["Accept"] = headers.Accept;
+        if (!headers.UserAgent.IsNullOrEmpty()) request["User-Agent"] = headers.UserAgent;
+
+        // 加上令牌或其它身份验证
+        if (!Token.IsNullOrEmpty()) request["Authorization"] = Token.Contains(" ") ? Token : $"Bearer {Token}";
 
         var ps = args.ToDictionary();
         if (method.EqualIgnoreCase("POST"))
-            req.Body = ps.ToJson().GetBytes();
+            request.Body = ps.ToJson().GetBytes();
         else
         {
             var sb = Pool.StringBuilder.Get();
@@ -749,10 +752,10 @@ public class TinyHttpClient : DisposeBase, IApiClient
                 sb.AppendFormat("{0}={1}", item.Key, HttpUtility.UrlEncode(v));
             }
 
-            req.RequestUri = new Uri(BaseAddress, sb.Put(true));
+            request.RequestUri = new Uri(BaseAddress, sb.Put(true));
         }
 
-        return req;
+        return request;
     }
 
     /// <summary>处理响应</summary>
