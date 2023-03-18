@@ -1,4 +1,4 @@
-﻿namespace NewLife.Http;
+﻿namespace NewLife.Http.Headers;
 
 public class HttpContentHeaders
 {

@@ -1,4 +1,6 @@
-﻿namespace NewLife.Http;
+﻿using NewLife.Http.Headers;
+
+namespace NewLife.Http;
 
 public abstract class HttpContent
 {

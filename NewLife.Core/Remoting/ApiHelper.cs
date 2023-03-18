@@ -152,7 +152,7 @@ public static class ApiHelper
             else if (args != null)
             {
                 var content = new ByteArrayContent(args.ToJson().GetBytes());
-                content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                content.Headers.ContentType = "application/json";
                 request.Content = content;
             }
         }
@@ -171,7 +171,7 @@ public static class ApiHelper
             var buf = pk.ReadBytes();
             buf = buf.CompressGZip();
             var content = new ByteArrayContent(buf);
-            content.Headers.ContentType = new MediaTypeHeaderValue("application/x-gzip");
+            content.Headers.ContentType = "application/x-gzip";
             return content;
         }
         else
@@ -179,7 +179,7 @@ public static class ApiHelper
             var content = pk.Next == null ?
                 new ByteArrayContent(pk.Data, pk.Offset, pk.Count) :
                 new ByteArrayContent(pk.ToArray());
-            content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+            content.Headers.ContentType = "application/octet-stream";
             return content;
         }
     }

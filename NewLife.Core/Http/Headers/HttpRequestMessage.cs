@@ -1,5 +1,4 @@
 ﻿using System.Net.Http;
-using NewLife.Http;
 
 namespace NewLife.Http.Headers;
 
