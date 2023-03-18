@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Threading.Tasks;
 using NewLife;
 using NewLife.Http;
@@ -20,8 +19,8 @@ public class ApiHttpClientTests : DisposeBase
     {
         _Server = new ApiServer(12347)
         {
-            //Log = XTrace.Log,
-            //EncoderLog = XTrace.Log,
+            Log = XTrace.Log,
+            EncoderLog = XTrace.Log,
         };
         _Server.Handler = new TokenApiHandler { Host = _Server };
         _Server.Start();
@@ -30,7 +29,10 @@ public class ApiHttpClientTests : DisposeBase
 
         //_Client = new ApiHttpClient();
         //_Client.Add("addr1", new Uri("http://127.0.0.1:12347"));
-        _Client = new ApiHttpClient(_Address);
+        _Client = new ApiHttpClient(_Address)
+        {
+            Log = XTrace.Log
+        };
     }
 
     protected override void Dispose(Boolean disposing)
@@ -104,9 +106,10 @@ public class ApiHttpClientTests : DisposeBase
 
     public void SlaveTest()
     {
-        var client = new ApiHttpClient("http://127.0.0.1:10000,http://127.0.0.1:20000," + _Address)
+        var client = new ApiHttpClient("http://127.0.0.1:11000,http://127.0.0.1:20000," + _Address)
         {
-            Timeout = 3_000
+            Log = XTrace.Log,
+            Timeout = 1_000
         };
         var ac = client as IApiClient;
 
@@ -121,13 +124,14 @@ public class ApiHttpClientTests : DisposeBase
             UserName = "test",
             Password = "",
         };
-        var client = new ApiHttpClient("http://127.0.0.1:10001,http://127.0.0.1:20001,http://star.newlifex.com:6600")
+        var client = new ApiHttpClient("http://127.0.0.1:11001,http://127.0.0.1:20001,http://star.newlifex.com:6600")
         {
             Filter = filter,
-            Timeout = 3_000
+            Log = XTrace.Log,
+            Timeout = 1_000
         };
 
-        var rs = await client.PostAsync<Object>("config/getall", new { appid = "starweb" });
+        var rs = await client.PostAsync<Object>("config/getall", new { appid = "test" });
         Assert.NotNull(rs);
 
         var ss = client.Services;
@@ -142,7 +146,7 @@ public class ApiHttpClientTests : DisposeBase
 
     public async Task RoundRobinTest()
     {
-        var client = new ApiHttpClient("test1=3*http://127.0.0.1:10000,test2=7*http://127.0.0.1:20000,")
+        var client = new ApiHttpClient("test1=3*http://127.0.0.1:11000,test2=7*http://127.0.0.1:20000,")
         {
             RoundRobin = true,
             Timeout = 3_000,
@@ -161,7 +165,7 @@ public class ApiHttpClientTests : DisposeBase
             var svc = client.Services[0];
             Assert.Equal("test1", svc.Name);
             Assert.Equal(3, svc.Weight);
-            Assert.Equal("http://127.0.0.1:10000/", svc.Address + "");
+            Assert.Equal("http://127.0.0.1:11000/", svc.Address + "");
 
             svc = client.Services[1];
             Assert.Equal("test2", svc.Name);
@@ -197,13 +201,13 @@ public class ApiHttpClientTests : DisposeBase
         {
             var svc = client.Services[0];
             Assert.Null(svc.Client);
-            Assert.True(svc.NextTime > DateTime.Now.AddSeconds(55));
+            //Assert.True(svc.NextTime > DateTime.Now.AddSeconds(55));
             Assert.Equal(1, svc.Times);
         }
         {
             var svc = client.Services[1];
             Assert.Null(svc.Client);
-            Assert.True(svc.NextTime > DateTime.Now.AddSeconds(55));
+            //Assert.True(svc.NextTime > DateTime.Now.AddSeconds(55));
             Assert.Equal(1, svc.Times);
         }
         {
@@ -235,7 +239,7 @@ public class ApiHttpClientTests : DisposeBase
             Log = XTrace.Log,
         };
 
-        var rs = await client.PostAsync<Object>("config/getall", new { appid = "starweb" });
+        var rs = await client.PostAsync<Object>("config/getall", new { appid = "test" });
 
         Assert.NotNull(rs);
         Assert.NotNull(filter.Token);

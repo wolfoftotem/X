@@ -1,4 +1,5 @@
 ﻿using System.Net.Http;
+using System.Net.Sockets;
 using System.Runtime.Serialization;
 using System.Xml.Serialization;
 using NewLife.Configuration;
@@ -205,7 +206,7 @@ public class ApiHttpClient : DisposeBase, IApiClient, IConfigMapping, ILogFeatur
                     ex.Source = _currentService?.Address + "/" + action;
                     throw;
                 }
-                else if (ex is HttpRequestException or TaskCanceledException)
+                else if (ex is HttpRequestException or TaskCanceledException or SocketException || ex is IOException io && io.InnerException is SocketException)
                 {
                     if (filter != null) await filter.OnError(_currentService?.Client, ex, this);
                     if (++i >= svrs.Count) throw;
@@ -224,10 +225,58 @@ public class ApiHttpClient : DisposeBase, IApiClient, IConfigMapping, ILogFeatur
     async Task<TResult> IApiClient.InvokeAsync<TResult>(String action, Object args) => await InvokeAsync<TResult>(args == null ? HttpMethod.Get : HttpMethod.Post, action, args);
 
     /// <summary>同步调用，阻塞等待</summary>
+    /// <typeparam name="TResult"></typeparam>
+    /// <param name="method">请求方法</param>
+    /// <param name="action">服务操作</param>
+    /// <param name="args">参数</param>
+    /// <param name="onRequest">请求头回调</param>
+    /// <returns></returns>
+    public virtual TResult Invoke<TResult>(HttpMethod method, String action, Object args = null, Action<HttpRequestMessage> onRequest = null)
+    {
+        var returnType = typeof(TResult);
+        var svrs = Services;
+
+        var i = 0;
+        do
+        {
+            // 建立请求
+            var request = BuildRequest(method, action, args, returnType);
+            onRequest?.Invoke(request);
+
+            var filter = Filter;
+            try
+            {
+                var msg = Send(request);
+
+                return ApiHelper.ProcessResponse<TResult>(msg, CodeName, DataName).Result;
+            }
+            catch (Exception ex)
+            {
+                while (ex is AggregateException age) ex = age.InnerException;
+
+                if (ex is ApiException)
+                {
+                    if (filter != null) filter.OnError(_currentService?.Client, ex, this).Wait();
+
+                    ex.Source = _currentService?.Address + "/" + action;
+                    throw;
+                }
+                else if (ex is HttpRequestException or TaskCanceledException or SocketException || ex is IOException io && io.InnerException is SocketException)
+                {
+                    if (filter != null) filter.OnError(_currentService?.Client, ex, this).Wait();
+                    if (++i >= svrs.Count) throw;
+                }
+                else
+                    throw;
+            }
+        } while (true);
+    }
+
+    /// <summary>同步调用，阻塞等待</summary>
     /// <param name="action">服务操作</param>
     /// <param name="args">参数</param>
     /// <returns></returns>
-    TResult IApiClient.Invoke<TResult>(String action, Object args) => Task.Run(() => InvokeAsync<TResult>(args == null ? HttpMethod.Get : HttpMethod.Post, action, args)).Result.Result;
+    TResult IApiClient.Invoke<TResult>(String action, Object args) => Invoke<TResult>(args == null ? HttpMethod.Get : HttpMethod.Post, action, args);
     #endregion
 
     #region 构造请求
@@ -291,6 +340,53 @@ public class ApiHttpClient : DisposeBase, IApiClient, IConfigMapping, ILogFeatur
             }
 
             return await SendOnServiceAsync(request, service, client);
+        }
+        catch (Exception ex)
+        {
+            error = ex;
+
+            throw;
+        }
+        finally
+        {
+            var msCost = st.StopCount(sw) / 1000;
+            if (SlowTrace > 0 && msCost >= SlowTrace) WriteLog($"慢调用[{request.RequestUri.AbsoluteUri}]，耗时{msCost:n0}ms");
+
+            // 归还服务
+            PutService(service, error);
+        }
+    }
+
+    /// <summary>异步发送</summary>
+    /// <param name="request">请求</param>
+    /// <returns></returns>
+    protected virtual HttpResponseMessage Send(HttpRequestMessage request)
+    {
+        if (Services.Count == 0) throw new InvalidOperationException("未添加服务地址！");
+
+        // 获取一个处理当前请求的服务，此处实现负载均衡LoadBalance和故障转移Failover
+        var service = GetService();
+        Source = service.Name;
+        _currentService = service;
+
+        // 性能计数器，次数、TPS、平均耗时
+        var st = StatInvoke;
+        var sw = st.StartCount();
+        Exception error = null;
+        try
+        {
+            var client = service.Client;
+            if (client == null)
+            {
+                if (service.CreateTime.Year < 2000) Log?.Debug("使用[{0}]：{1}", service.Name, service.Address);
+
+                client = CreateClient();
+                client.BaseAddress = service.Address;
+                service.Client = client;
+                service.CreateTime = DateTime.Now;
+            }
+
+            return SendOnService(request, service, client);
         }
         catch (Exception ex)
         {
@@ -382,7 +478,7 @@ public class ApiHttpClient : DisposeBase, IApiClient, IConfigMapping, ILogFeatur
         var ex = error;
         while (ex is AggregateException age) ex = age.InnerException;
 
-        if (ex is HttpRequestException or TaskCanceledException)
+        if (ex is HttpRequestException or TaskCanceledException or SocketException || ex is IOException io && io.InnerException is SocketException)
         {
             // 网络异常时，自动切换到其它节点
             _idxServer++;
@@ -411,7 +507,27 @@ public class ApiHttpClient : DisposeBase, IApiClient, IConfigMapping, ILogFeatur
         if (filter != null) await filter.OnResponse(client, response, this);
 
         // 业务层只会返回200 OK
-        response.EnsureSuccessStatusCode();
+        response?.EnsureSuccessStatusCode();
+
+        return response;
+    }
+
+    /// <summary>在指定服务地址上发生请求</summary>
+    /// <param name="request">请求消息</param>
+    /// <param name="service">服务名</param>
+    /// <param name="client">客户端</param>
+    /// <returns></returns>
+    protected virtual HttpResponseMessage SendOnService(HttpRequestMessage request, Service service, HttpClient client)
+    {
+        var filter = Filter;
+        if (filter != null) filter.OnRequest(client, request, this).Wait();
+
+        var response = client.Send(request);
+
+        if (filter != null) filter.OnResponse(client, response, this).Wait();
+
+        // 业务层只会返回200 OK
+        response?.EnsureSuccessStatusCode();
 
         return response;
     }

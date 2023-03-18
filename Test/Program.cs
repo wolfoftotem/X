@@ -32,7 +32,7 @@ public class Program
             sw.Start();
             try
             {
-                Test4();
+                Test4().Wait();
             }
             catch (Exception ex)
             {
@@ -142,7 +142,7 @@ public class Program
         Console.ReadLine();
     }
 
-    static async void Test4()
+    static async Task Test4()
     {
         var test = new ApiHttpClientTests();
         await test.BasicTest();

@@ -74,6 +74,7 @@ public class TokenHttpFilter : IHttpFilter
         if (Token == null || Expire < DateTime.Now)
         {
             Token = await SendAuth(client);
+            if (Token != null) return;
 
             // 过期时间和刷新令牌的时间
             Expire = DateTime.Now.AddSeconds(Token.ExpireIn);
@@ -86,6 +87,7 @@ public class TokenHttpFilter : IHttpFilter
             try
             {
                 Token = await SendRefresh(client);
+                if (Token != null) return;
 
                 // 过期时间和刷新令牌的时间
                 Expire = DateTime.Now.AddSeconds(Token.ExpireIn);

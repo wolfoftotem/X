@@ -158,8 +158,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
             if (rs == null || rs.Count == 0) return null;
 
             // 解析响应
-            //rs = ParseResponse(rs);
-            if (!res.Parse(rs)) return res;
+            if (!res.Parse(rs)) throw new HttpParseException();
             rs = res.Body;
 
             // 跳转
@@ -363,8 +362,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
             if (rs == null || rs.Count == 0) return null;
 
             // 解析响应
-            //rs = ParseResponse(rs);
-            if (!res.Parse(rs)) return res;
+            if (!res.Parse(rs)) throw new HttpParseException();
             rs = res.Body;
 
             // 跳转
