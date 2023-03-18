@@ -155,7 +155,7 @@ public class ApiHttpClient : DisposeBase, IApiClient, IConfigMapping, ILogFeatur
     /// <param name="action">服务操作</param>
     /// <param name="args">参数</param>
     /// <returns></returns>
-    public TResult Get<TResult>(String action, Object args = null) => Task.Run(() => GetAsync<TResult>(action, args)).Result;
+    public TResult Get<TResult>(String action, Object args = null) => Task.Run(() => GetAsync<TResult>(action, args)).Result.Result;
 
     /// <summary>异步提交，参数Json打包在Body</summary>
     /// <param name="action">服务操作</param>
@@ -167,7 +167,7 @@ public class ApiHttpClient : DisposeBase, IApiClient, IConfigMapping, ILogFeatur
     /// <param name="action">服务操作</param>
     /// <param name="args">参数</param>
     /// <returns></returns>
-    public TResult Post<TResult>(String action, Object args = null) => Task.Run(() => PostAsync<TResult>(action, args)).Result;
+    public TResult Post<TResult>(String action, Object args = null) => Task.Run(() => PostAsync<TResult>(action, args)).Result.Result;
 
     /// <summary>异步调用，等待返回结果</summary>
     /// <typeparam name="TResult"></typeparam>
@@ -228,7 +228,7 @@ public class ApiHttpClient : DisposeBase, IApiClient, IConfigMapping, ILogFeatur
     /// <param name="action">服务操作</param>
     /// <param name="args">参数</param>
     /// <returns></returns>
-    TResult IApiClient.Invoke<TResult>(String action, Object args) => Task.Run(() => InvokeAsync<TResult>(args == null ? HttpMethod.Get : HttpMethod.Post, action, args)).Result;
+    TResult IApiClient.Invoke<TResult>(String action, Object args) => Task.Run(() => InvokeAsync<TResult>(args == null ? HttpMethod.Get : HttpMethod.Post, action, args)).Result.Result;
     #endregion
 
     #region 构造请求

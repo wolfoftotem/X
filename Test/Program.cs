@@ -30,18 +30,15 @@ public class Program
         {
             Stopwatch sw = new Stopwatch();
             sw.Start();
-#if !DEBUG
             try
             {
-#endif
-            Test1();
-#if !DEBUG
+                Test1();
             }
             catch (Exception ex)
             {
+                ex = ex.GetTrue();
                 XTrace.WriteException(ex);
             }
-#endif
 
             sw.Stop();
             Console.WriteLine("OK! 耗时 {0}", sw.Elapsed);

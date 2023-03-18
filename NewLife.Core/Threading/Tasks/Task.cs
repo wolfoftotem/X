@@ -1,8 +1,9 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 
 namespace System.Threading.Tasks;
+using OperationCanceledException = NewLife.OperationCanceledException;
 
 [DebuggerDisplay("Id = {Id}, Status = {Status}")]
 [DebuggerTypeProxy(typeof(TaskDebuggerView))]

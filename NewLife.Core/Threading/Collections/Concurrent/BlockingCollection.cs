@@ -1,9 +1,10 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace System.Collections.Concurrent;
+using OperationCanceledException = NewLife.OperationCanceledException;
 
 [ComVisible(false)]
 [DebuggerDisplay("Count={Count}")]

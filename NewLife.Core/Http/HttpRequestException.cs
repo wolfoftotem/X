@@ -11,11 +11,11 @@ public class HttpRequestException : Exception
     {
     }
 
-    public HttpRequestException(String? message)
+    public HttpRequestException(String message)
         : base(message, null)
     {
     }
 
-    public HttpRequestException(String? message, Exception? inner, HttpStatusCode? statusCode)
+    public HttpRequestException(String message, Exception inner, HttpStatusCode? statusCode)
         : base(message, inner) => StatusCode = statusCode;
 }

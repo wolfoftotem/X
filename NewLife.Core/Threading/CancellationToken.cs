@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 
 namespace System.Threading;
 
@@ -62,9 +62,10 @@ public struct CancellationToken
 	{
 		if (Source.IsCancellationRequested)
 		{
-			throw new OperationCanceledException(this);
-		}
-	}
+            //throw new OperationCanceledException(this);
+            throw new OperationCanceledException();
+        }
+    }
 
 	public bool Equals(CancellationToken other)
 	{

@@ -47,14 +47,14 @@ public class HttpMethod : IEquatable<HttpMethod>
         _http3Index = http3StaticTableIndex;
     }
 
-    public Boolean Equals(HttpMethod? other)
+    public Boolean Equals(HttpMethod other)
     {
         if (other is null) return false;
 
         return (Object)Method == other!.Method || String.Equals(Method, other!.Method, StringComparison.OrdinalIgnoreCase);
     }
 
-    public override Boolean Equals(Object? obj) => Equals(obj as HttpMethod);
+    public override Boolean Equals(Object obj) => Equals(obj as HttpMethod);
 
     public override Int32 GetHashCode()
     {
@@ -67,7 +67,7 @@ public class HttpMethod : IEquatable<HttpMethod>
 
     public override String ToString() => Method;
 
-    public static Boolean operator ==(HttpMethod? left, HttpMethod? right) => left is not null && right is not null ? left!.Equals(right) : (Object)left == right;
+    public static Boolean operator ==(HttpMethod left, HttpMethod right) => left is not null && right is not null ? left!.Equals(right) : (Object)left == right;
 
-    public static Boolean operator !=(HttpMethod? left, HttpMethod? right) => !(left == right);
+    public static Boolean operator !=(HttpMethod left, HttpMethod right) => !(left == right);
 }
