@@ -733,9 +733,19 @@ public class TinyHttpClient : DisposeBase, IApiClient
         // 加上令牌或其它身份验证
         if (!Token.IsNullOrEmpty()) request["Authorization"] = Token.Contains(" ") ? Token : $"Bearer {Token}";
 
-        var ps = args.ToDictionary();
         if (method.EqualIgnoreCase("POST"))
-            request.Body = ps.ToJson().GetBytes();
+        {
+            // 准备参数，二进制优先
+            if (args is Packet pk)
+                request.Body = pk;
+            // 支持IAccessor
+            else if (args is IAccessor acc)
+                request.Body = acc.ToPacket();
+            else if (args is Byte[] buf)
+                request.Body = buf;
+            else
+                request.Body = args.ToDictionary().ToJson().GetBytes();
+        }
         else
         {
             var sb = Pool.StringBuilder.Get();
@@ -743,7 +753,7 @@ public class TinyHttpClient : DisposeBase, IApiClient
             sb.Append('?');
 
             var first = true;
-            foreach (var item in ps)
+            foreach (var item in args.ToDictionary())
             {
                 if (!first) sb.Append('&');
                 first = false;
