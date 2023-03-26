@@ -215,9 +215,7 @@
 
   <ItemGroup>
     <Compile Include="..\XAgent\AgentServiceBase.cs" Link="Agent\AgentServiceBase.cs" />
-    <Compile Include="..\XAgent\AgentServiceBase_Base.cs" Link="Agent\AgentServiceBase_Base.cs" />
     <Compile Include="..\XAgent\IAgentService.cs" Link="Agent\IAgentService.cs" />
-    <Compile Include="..\XAgent\ServiceControl.cs" Link="Agent\ServiceControl.cs" />
     <Compile Include="..\XAgent\ServiceHelper.cs" Link="Agent\ServiceHelper.cs" />
     <Compile Include="..\XAgent\Setting.cs" Link="Agent\Setting.cs" />
   </ItemGroup>
@@ -236,7 +234,6 @@
   <ItemGroup>
     <Folder Include="IOModel\" />
     <Folder Include="Properties\" />
-    <Folder Include="Agent\" />
   </ItemGroup>
 
 </Project>

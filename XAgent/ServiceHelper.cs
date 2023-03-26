@@ -1,6 +1,11 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Security.Principal;
 using System.ServiceProcess;
+using NewLife;
+using System.Text;
 using NewLife.Log;
 
 namespace XAgent;
@@ -67,6 +72,23 @@ public static class ServiceHelper
             RunCmd("net stop " + name, false, true);
     }
 
+    /// <summary>重启服务</summary>
+    /// <param name="service">服务</param>
+    public static Boolean Restart(this IAgentService service)
+    {
+        var serviceName = service.ServiceName;
+        XTrace.WriteLine("{0}.Restart {1}", service.GetType().Name, serviceName);
+
+#if !NETSTANDARD
+        if (!IsAdministrator()) return RunAsAdministrator("-restart");
+#endif
+
+        var cmd = $"/c net stop {serviceName} & ping 127.0.0.1 -n 5 & net start {serviceName}";
+        Process.Start("cmd.exe", cmd);
+
+        return true;
+    }
+
     /// <summary>执行一个命令</summary>
     /// <param name="cmd"></param>
     /// <param name="showWindow"></param>
@@ -114,10 +136,10 @@ public static class ServiceHelper
 
     #region 服务操作辅助函数
     /// <summary>是否已安装</summary>
-    public static Boolean? IsInstalled(this IAgentService service) => IsServiceInstalled(service.ServiceName);
+    public static Boolean IsInstalled(this IAgentService service) => IsServiceInstalled(service.ServiceName);
 
     /// <summary>是否已启动</summary>
-    public static Boolean? IsRunning(this IAgentService service) => IsServiceRunning(service.ServiceName);
+    public static Boolean IsRunning(this IAgentService service) => IsServiceRunning(service.ServiceName);
 
     /// <summary>取得服务</summary>
     /// <param name="name"></param>
@@ -136,91 +158,111 @@ public static class ServiceHelper
     }
 
     /// <summary>是否已安装</summary>
-    public static Boolean? IsServiceInstalled(String name)
+    public static Boolean IsServiceInstalled(String name)
     {
-        ServiceController control = null;
+        // 取的时候就抛异常，是不知道是否安装的
+        using var control = GetService(name);
+        if (control == null) return false;
+
         try
         {
-            // 取的时候就抛异常，是不知道是否安装的
-            control = GetService(name);
-            if (control == null) return false;
-            try
-            {
-                //尝试访问一下才知道是否已安装
-                var b = control.CanShutdown;
-                return true;
-            }
-            catch { return false; }
+            // 尝试访问一下才知道是否已安装
+            var b = control.CanShutdown;
+            return true;
         }
-        catch { return null; }
-        finally { control?.Dispose(); }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>是否已启动</summary>
-    public static Boolean? IsServiceRunning(String name)
+    public static Boolean IsServiceRunning(String name)
     {
-        ServiceController control = null;
         try
         {
-            control = GetService(name);
+            using var control = GetService(name);
             if (control == null) return false;
-            try
-            {
-                //尝试访问一下才知道是否已安装
-                var b = control.CanShutdown;
-            }
-            catch { return false; }
+
+            // 尝试访问一下才知道是否已安装
+            var b = control.CanShutdown;
 
             control.Refresh();
-            if (control.Status == ServiceControllerStatus.Running) return true;
-            return control.Status == ServiceControllerStatus.Stopped ? false : null;
+
+            return control.Status == ServiceControllerStatus.Running;
         }
-        catch { return null; }
-        finally { control?.Dispose(); }
+        catch
+        {
+            return false;
+        }
     }
-    #endregion
 
-    #region 服务依赖
-    ///// <summary>启动服务准备工作</summary>
-    //public static void PreStartWork(this IAgentService service)
-    //{
-    //    var Services = ServiceController.GetServices();
+    static Boolean RunAsAdministrator(String argument)
+    {
+        var exe = ExecutablePath;
+        if (exe.IsNullOrEmpty()) return false;
 
-    //    //首先检查是否有依赖服务
-    //    // 1.服务本身的依赖
-    //    ServiceController[] servicesDependedOn = null;
-    //    var scApp = Services.FirstOrDefault(s => s.ServiceName == service.ServiceName);
-    //    if (scApp != null)
-    //    {
-    //        servicesDependedOn = scApp.ServicesDependedOn;
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = exe,
+            Arguments = argument,
+            Verb = "runas",
+            UseShellExecute = true,
+        };
 
-    //        foreach (var sc in servicesDependedOn)
-    //        {
-    //            try
-    //            {
-    //                sc.Start();
-    //            }
-    //            catch (Exception ex)
-    //            {
-    //                //依赖服务启动未成功
-    //                throw new Exception("依赖服务" + sc.ServiceName + "未启动成功", ex);
-    //            }
-    //        }
-    //    }
-    //    // 2.配置文件的依赖
-    //    var scConfig = Config.GetConfigSplit<String>("XAgent.ServicesDependedOn", ",", Config.GetConfigSplit<String>("ServicesDependedOn", ",", null));
-    //    if (scConfig != null)
-    //    {
-    //        foreach (var item in scConfig)
-    //        {
-    //            var sc = Services.FirstOrDefault(s => s.ServiceName == item);
-    //            if (sc != null)
-    //                sc.Start();
-    //            else
-    //                throw new Exception(String.Format("依赖服务{0}不存在", item));
-    //        }
-    //    }
-    //}
+        var p = Process.Start(startInfo);
+        return !p.WaitForExit(5_000) || p.ExitCode == 0;
+    }
+
+    static String _executablePath;
+    static String ExecutablePath
+    {
+        get
+        {
+            if (_executablePath == null)
+            {
+                var entryAssembly = Assembly.GetEntryAssembly();
+                if (entryAssembly != null)
+                {
+                    var codeBase = entryAssembly.CodeBase;
+                    var uri = new Uri(codeBase);
+                    _executablePath = uri.IsFile ? uri.LocalPath + Uri.UnescapeDataString(uri.Fragment) : uri.ToString();
+                }
+                else
+                {
+                    var moduleFileNameLongPath = GetModuleFileNameLongPath(new HandleRef(null, IntPtr.Zero));
+                    _executablePath = moduleFileNameLongPath.ToString().GetFullPath();
+                }
+            }
+
+            return _executablePath;
+        }
+    }
+
+    static StringBuilder GetModuleFileNameLongPath(HandleRef hModule)
+    {
+        var sb = new StringBuilder(260);
+        var num = 1;
+        var num2 = 0;
+        while ((num2 = GetModuleFileName(hModule, sb, sb.Capacity)) == sb.Capacity && Marshal.GetLastWin32Error() == 122 && sb.Capacity < 32767)
+        {
+            num += 2;
+            var capacity = (num * 260 < 32767) ? (num * 260) : 32767;
+            sb.EnsureCapacity(capacity);
+        }
+        sb.Length = num2;
+        return sb;
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    static extern Int32 GetModuleFileName(HandleRef hModule, StringBuilder buffer, Int32 length);
+
+    public static Boolean IsAdministrator()
+    {
+        var current = WindowsIdentity.GetCurrent();
+        var windowsPrincipal = new WindowsPrincipal(current);
+        return windowsPrincipal.IsInRole(WindowsBuiltInRole.Administrator);
+    }
     #endregion
 
     #region 日志
