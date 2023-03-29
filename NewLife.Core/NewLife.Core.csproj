@@ -129,7 +129,6 @@
     <Compile Remove="Messaging\MethodMessage.cs" />
     <Compile Remove="Messaging\NullMessage.cs" />
     <Compile Remove="Messaging\StringMessage.cs" />
-    <Compile Remove="Model\Actor.cs" />
     <Compile Remove="Net\PacketStream.cs" />
     <Compile Remove="Net\SerialTransport.cs" />
     <Compile Remove="Net\Statistics.cs" />
