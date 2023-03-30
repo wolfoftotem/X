@@ -2,34 +2,40 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using System.Threading;
-using System.Threading.Tasks;
+
 #if __WIN__
+
 using System.Windows.Forms;
-using NewLife.Net;
+
 #endif
+
 using NewLife.Reflection;
 using NewLife.Threading;
+using NewLife.Windows;
 
 #nullable enable
-namespace NewLife.Log
+
+namespace NewLife.Log;
+
+/// <summary>日志类，包含跟踪调试功能</summary>
+/// <remarks>
+/// 文档 https://newlifex.com/core/log
+///
+/// 该静态类包括写日志、写调用栈和Dump进程内存等调试功能。
+///
+/// 默认写日志到文本文件，可通过修改<see cref="Log"/>属性来增加日志输出方式。
+/// 对于控制台工程，可以直接通过UseConsole方法，把日志输出重定向为控制台输出，并且可以为不同线程使用不同颜色。
+/// </remarks>
+public static class XTrace
 {
-    /// <summary>日志类，包含跟踪调试功能</summary>
-    /// <remarks>
-    /// 文档 https://newlifex.com/core/log
-    /// 
-    /// 该静态类包括写日志、写调用栈和Dump进程内存等调试功能。
-    /// 
-    /// 默认写日志到文本文件，可通过修改<see cref="Log"/>属性来增加日志输出方式。
-    /// 对于控制台工程，可以直接通过UseConsole方法，把日志输出重定向为控制台输出，并且可以为不同线程使用不同颜色。
-    /// </remarks>
-    public static class XTrace
-    {
-        #region 写日志
-        /// <summary>文本文件日志</summary>
-        private static ILog _Log = Logger.Null;
-        /// <summary>日志提供者，默认使用文本文件日志</summary>
-        public static ILog Log { get { InitLog(); return _Log; } set { _Log = value; } }
+    #region 写日志
+
+    /// <summary>文本文件日志</summary>
+    private static ILog _Log = Logger.Null;
+
+    /// <summary>日志提供者，默认使用文本文件日志</summary>
+    public static ILog Log
+    { get { InitLog(); return _Log; } set { _Log = value; } }
 
         /// <summary>输出日志</summary>
         /// <param name="msg">信息</param>
@@ -70,16 +76,18 @@ namespace NewLife.Log
 
             WriteVersion();
 
-            Log.Error("{0}", ex);
-        }
-        #endregion
+        Log.Error("{0}", ex);
+    }
 
-        #region 构造
-        static XTrace()
-        {
-            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
-            TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
-            AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+    #endregion 写日志
+
+    #region 构造
+
+    static XTrace()
+    {
+        AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+        TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
+        AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
 
             ThreadPoolX.Init();
 
@@ -92,12 +100,17 @@ namespace NewLife.Log
             catch { }
         }
 
-        static void CurrentDomain_UnhandledException(Object sender, UnhandledExceptionEventArgs e)
+    private static void CurrentDomain_UnhandledException(Object sender, UnhandledExceptionEventArgs e)
+    {
+        if (e.ExceptionObject is Exception ex)
         {
-            if (e.ExceptionObject is Exception ex) WriteException(ex);
-            if (e.IsTerminating)
-            {
-                Log.Fatal("异常退出！");
+            // 全局异常埋点
+            DefaultTracer.Instance?.NewError(ex.GetType().Name, ex);
+            WriteException(ex);
+        }
+        if (e.IsTerminating)
+        {
+            Log.Fatal("异常退出！");
 
                 if (Log is CompositeLog compositeLog)
                 {
@@ -129,23 +142,23 @@ namespace NewLife.Log
             }
         }
 
-        static readonly Object _lock = new();
-        static Int32 _initing = 0;
+    private static readonly Object _lock = new();
+    private static Int32 _initing = 0;
 
-        /// <summary>
-        /// 2012.11.05 修正初次调用的时候，由于同步BUG，导致Log为空的问题。
-        /// </summary>
-        static Boolean InitLog()
-        {
-            /*
-             * 日志初始化可能会触发配置模块，其内部又写日志导致死循环。
-             * 1，外部写日志引发初始化
-             * 2，标识日志初始化正在进行中
-             * 3，初始化日志提供者
-             * 4，此时如果再次引发写入日志，发现正在进行中，放弃写入的日志
-             * 5，标识日志初始化已完成
-             * 6，正常写入日志
-             */
+    /// <summary>
+    /// 2012.11.05 修正初次调用的时候，由于同步BUG，导致Log为空的问题。
+    /// </summary>
+    private static Boolean InitLog()
+    {
+        /*
+         * 日志初始化可能会触发配置模块，其内部又写日志导致死循环。
+         * 1，外部写日志引发初始化
+         * 2，标识日志初始化正在进行中
+         * 3，初始化日志提供者
+         * 4，此时如果再次引发写入日志，发现正在进行中，放弃写入的日志
+         * 5，标识日志初始化已完成
+         * 6，正常写入日志
+         */
 
             if (_Log != null && _Log != Logger.Null) return true;
             if (_initing > 0 && _initing == Thread.CurrentThread.ManagedThreadId) return false;
@@ -174,19 +187,22 @@ namespace NewLife.Log
 
             //WriteVersion();
 
-            return true;
-        }
-        #endregion
+        return true;
+    }
 
-        #region 使用控制台输出
-        private static Boolean _useConsole;
-        /// <summary>使用控制台输出日志，只能调用一次</summary>
-        /// <param name="useColor">是否使用颜色，默认使用</param>
-        /// <param name="useFileLog">是否同时使用文件日志，默认使用</param>
-        public static void UseConsole(Boolean useColor = true, Boolean useFileLog = true)
-        {
-            if (_useConsole) return;
-            _useConsole = true;
+    #endregion 构造
+
+    #region 使用控制台输出
+
+    private static Boolean _useConsole;
+
+    /// <summary>使用控制台输出日志，只能调用一次</summary>
+    /// <param name="useColor">是否使用颜色，默认使用</param>
+    /// <param name="useFileLog">是否同时使用文件日志，默认使用</param>
+    public static void UseConsole(Boolean useColor = true, Boolean useFileLog = true)
+    {
+        if (_useConsole) return;
+        _useConsole = true;
 
             //if (!Runtime.IsConsole) return;
             Runtime.IsConsole = true;
@@ -201,21 +217,67 @@ namespace NewLife.Log
                     if (Console.WindowHeight <= 25) Console.WindowHeight = Console.WindowHeight * 3 / 2;
                 }
 #else
-                if (Console.WindowWidth <= 80) Console.WindowWidth = Console.WindowWidth * 3 / 2;
-                if (Console.WindowHeight <= 25) Console.WindowHeight = Console.WindowHeight * 3 / 2;
+            if (Console.WindowWidth <= 80) Console.WindowWidth = Console.WindowWidth * 3 / 2;
+            if (Console.WindowHeight <= 25) Console.WindowHeight = Console.WindowHeight * 3 / 2;
 #endif
             }
             catch { }
 
-            var clg = new ConsoleLog { UseColor = useColor };
-            if (useFileLog)
-                _Log = new CompositeLog(clg, Log);
-            else
-                _Log = clg;
-        }
-        #endregion
+        var clg = new ConsoleLog { UseColor = useColor };
+        if (useFileLog)
+            _Log = new CompositeLog(clg, Log);
+        else
+            _Log = clg;
+    }
 
-        #region 拦截WinForm异常
+    #endregion 使用控制台输出
+
+    #region 控制台禁用快捷编辑
+
+    /// <summary>
+    /// 禁用控制台快捷编辑，在UseConsole方法之后调用
+    /// </summary>
+    public static void DisbleConsoleEdit()
+    {
+        if (!_useConsole) return;
+        try
+        {
+            if (Runtime.Windows)
+            {
+                ConsoleHelper.DisbleQuickEditMode();
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    #endregion 控制台禁用快捷编辑
+
+    #region 控制台禁用关闭按钮
+
+    /// <summary>
+    /// 禁用控制台关闭按钮
+    /// </summary>
+    /// <param name="consoleTitle">控制台程序名称，可使用Console.Title动态设置的值</param>
+    public static void DisbleConsoleCloseBtn(string consoleTitle)
+    {
+        try
+        {
+            if (Runtime.Windows)
+            {
+                ConsoleHelper.DisbleCloseBtn(consoleTitle);
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    #endregion 控制台禁用关闭按钮
+
+    #region 拦截WinForm异常
+
 #if __WIN__
         private static Int32 initWF = 0;
         private static Boolean _ShowErrorMessage;
@@ -237,17 +299,17 @@ namespace NewLife.Log
             Application.ThreadException += Application_ThreadException;
         }
 
-        static void CurrentDomain_UnhandledException2(Object sender, UnhandledExceptionEventArgs e)
-        {
-            var show = _ShowErrorMessage && Application.MessageLoop;
-            var ex = e.ExceptionObject as Exception;
-            var title = e.IsTerminating ? "异常退出" : "出错";
-            if (show) MessageBox.Show(ex?.Message, title, MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
+    private static void CurrentDomain_UnhandledException2(Object sender, UnhandledExceptionEventArgs e)
+    {
+        var show = _ShowErrorMessage && Application.MessageLoop;
+        var ex = e.ExceptionObject as Exception;
+        var title = e.IsTerminating ? "异常退出" : "出错";
+        if (show) MessageBox.Show(ex?.Message, title, MessageBoxButtons.OK, MessageBoxIcon.Error);
+    }
 
-        static void Application_ThreadException(Object sender, ThreadExceptionEventArgs e)
-        {
-            WriteException(e.Exception);
+    private static void Application_ThreadException(Object sender, ThreadExceptionEventArgs e)
+    {
+        WriteException(e.Exception);
 
             var show = _ShowErrorMessage && Application.MessageLoop;
             if (show) MessageBox.Show(e.Exception == null ? "" : e.Exception.Message, "出错", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -300,28 +362,34 @@ namespace NewLife.Log
                 MaxLines = maxLines
             };
 
-            return new CompositeLog(log, clg);
-        }
-#endif
-        #endregion
+        return new CompositeLog(log, clg);
+    }
 
-        #region 属性
-        /// <summary>是否调试。</summary>
-        public static Boolean Debug { get; set; }
+#endif
+
+    #endregion 拦截WinForm异常
+
+    #region 属性
+
+    /// <summary>是否调试。</summary>
+    public static Boolean Debug { get; set; }
 
         /// <summary>文本日志目录</summary>
         public static String? LogPath { get; set; }
 
-        ///// <summary>临时目录</summary>
-        //public static String TempPath { get; set; } = Setting.Current.TempPath;
-        #endregion
+    ///// <summary>临时目录</summary>
+    //public static String TempPath { get; set; } = Setting.Current.TempPath;
 
-        #region 版本信息
-        private static Int32 _writeVersion;
-        /// <summary>输出核心库和启动程序的版本号</summary>
-        public static void WriteVersion()
-        {
-            if (_writeVersion > 0 || Interlocked.CompareExchange(ref _writeVersion, 1, 0) != 0) return;
+    #endregion 属性
+
+    #region 版本信息
+
+    private static Int32 _writeVersion;
+
+    /// <summary>输出核心库和启动程序的版本号</summary>
+    public static void WriteVersion()
+    {
+        if (_writeVersion > 0 || Interlocked.CompareExchange(ref _writeVersion, 1, 0) != 0) return;
 
             var asm = Assembly.GetExecutingAssembly();
             WriteVersion(asm);
@@ -347,12 +415,13 @@ namespace NewLife.Log
                 //    if (ver.IsNullOrEmpty()) ver = tar.FrameworkName;
                 //}
 
-                WriteLine("{0} v{1} Build {2:yyyy-MM-dd HH:mm:ss} {3}", asmx.Name, asmx.FileVersion, asmx.Compile, ver);
-                var att = asmx.Asm.GetCustomAttribute<AssemblyCopyrightAttribute>();
-                WriteLine("{0} {1}", asmx.Title, att?.Copyright);
-            }
+            WriteLine("{0} v{1} Build {2:yyyy-MM-dd HH:mm:ss} {3}", asmx.Name, asmx.FileVersion, asmx.Compile, ver);
+            var att = asmx.Asm.GetCustomAttribute<AssemblyCopyrightAttribute>();
+            WriteLine("{0} {1}", asmx.Title, att?.Copyright);
         }
-        #endregion
     }
+
+    #endregion 版本信息
 }
+
 #nullable restore
