@@ -234,7 +234,7 @@ public class MachineInfo
         //CpuID = GetInfo("Win32_Processor", "ProcessorId");
         var uuid = GetInfo("Win32_ComputerSystemProduct", "UUID");
         Product = GetInfo("Win32_ComputerSystemProduct", "Name");
-        DiskID = GetInfo("Win32_DiskDrive", "SerialNumber");
+        DiskID = GetInfo("Win32_DiskDrive where mediatype=\"Fixed hard disk media\"", "SerialNumber");
 
         var sn = GetInfo("Win32_BIOS", "SerialNumber");
         if (!sn.IsNullOrEmpty() && !sn.EqualIgnoreCase("System Serial Number")) Serial = sn;
