@@ -190,10 +190,8 @@ public class HttpConfigProvider : ConfigProvider
                 var ver = rs["version"].ToInt(-1);
                 if (ver > 0) _version = ver;
 
-                if (obj is not IDictionary<String, Object> configs) return null;
-
-                return configs;
-            }
+                    return obj as IDictionary<String, Object>;
+                }
 
             return rs;
         }
