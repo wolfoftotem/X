@@ -20,11 +20,11 @@ namespace NewLife.Serialization
             var fm = CreateFormatter(true);
             fm.Stream = stream;
 #if DEBUG
-            //if (fm is Binary)
-            //    (fm as Binary).EnableTrace();
-            //else
-            //    stream = new NewLife.Log.TraceStream(stream);
-            //fm.Log = NewLife.Log.XTrace.Log;
+            if (fm is Binary)
+                (fm as Binary).EnableTrace();
+            else
+                stream = new NewLife.Log.TraceStream(stream);
+            fm.Log = NewLife.Log.XTrace.Log;
 #endif
             Object obj = this;
             return fm.TryRead(GetType(), ref obj);
@@ -38,11 +38,11 @@ namespace NewLife.Serialization
             var fm = CreateFormatter(false);
             fm.Stream = stream;
 #if DEBUG
-            //if (fm is Binary)
-            //    (fm as Binary).EnableTrace();
-            //else
-            //    stream = new NewLife.Log.TraceStream(stream);
-            //fm.Log = NewLife.Log.XTrace.Log;
+            if (fm is Binary)
+                (fm as Binary).EnableTrace();
+            else
+                stream = new NewLife.Log.TraceStream(stream);
+            fm.Log = NewLife.Log.XTrace.Log;
 #endif
             return fm.Write(this);
         }

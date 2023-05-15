@@ -38,7 +38,7 @@ namespace NewLife.Serialization
             bf.Serialize(ms, value);
 
             Host.WriteSize((Int32)ms.Length);
-            ms.WriteTo(Host.Stream);
+            ms.CopyTo(Host.Stream);
             ms.Put();
 
             return true;
