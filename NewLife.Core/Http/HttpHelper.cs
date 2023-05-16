@@ -2,6 +2,7 @@
 using System.Net.Http;
 using System.Reflection;
 using System.Text;
+using NewLife.Caching;
 using NewLife.Collections;
 using NewLife.Data;
 using NewLife.Http.Headers;
@@ -410,6 +411,20 @@ public static class HttpHelper
     /// <param name="requestUri">请求资源地址</param>
     /// <param name="fileName">目标文件名</param>
     public static async Task DownloadFileAsync(this HttpClient client, String requestUri, String fileName)
+    {
+        var rs = await client.GetStreamAsync(requestUri);
+        fileName.EnsureDirectory(true);
+        using var fs = new FileStream(fileName, FileMode.OpenOrCreate, FileAccess.ReadWrite);
+        rs.CopyTo(fs);
+        fs.Flush();
+    }
+
+    /// <summary>下载文件</summary>
+    /// <param name="client">Http客户端</param>
+    /// <param name="requestUri">请求资源地址</param>
+    /// <param name="fileName">目标文件名</param>
+    /// <param name="cancellationToken">取消通知</param>
+    public static async Task DownloadFileAsync(this HttpClient client, String requestUri, String fileName, CancellationToken cancellationToken)
     {
         var rs = await client.GetStreamAsync(requestUri);
         fileName.EnsureDirectory(true);

@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Net.Http;
 using System.Reflection;
 using NewLife.Http;
 using NewLife.Log;
@@ -111,8 +112,7 @@ public class Upgrade
     /// <summary>开始更新</summary>
     public void Download()
     {
-        var link = Link;
-        if (link == null) throw new Exception("没有可用新版本！");
+        var link = Link ?? throw new Exception("没有可用新版本！");
         if (String.IsNullOrEmpty(link.Url)) throw new Exception("升级包地址无效！");
 
         Download(link.Url, link.FullName);
@@ -133,7 +133,32 @@ public class Upgrade
             var sw = Stopwatch.StartNew();
 
             var web = CreateClient();
-            Task.Run(() => web.DownloadFileAsync(new Uri(url), file)).Wait();
+            Task.Run(() => web.DownloadFileAsync(url, file)).Wait();
+
+            sw.Stop();
+            WriteLog("下载完成！大小{0:n0}字节，耗时{1:n0}ms", file.AsFile().Length, sw.ElapsedMilliseconds);
+        }
+
+        SourceFile = file;
+    }
+
+    /// <summary>开始更新</summary>
+    /// <param name="url">下载源</param>
+    /// <param name="fileName">文件名</param>
+    /// <param name="cancellationToken">取消通知</param>
+    public async Task DownloadAsync(String url, String fileName, CancellationToken cancellationToken)
+    {
+        // 如果更新包不存在，则下载
+        var file = UpdatePath.CombinePath(fileName).GetBasePath();
+        if (!CacheFile && File.Exists(file)) File.Delete(file); ;
+        if (!File.Exists(file))
+        {
+            WriteLog("准备下载 {0} 到 {1}", url, file);
+
+            var sw = Stopwatch.StartNew();
+
+            var web = CreateClient();
+            await web.DownloadFileAsync(url, file, cancellationToken);
 
             sw.Stop();
             WriteLog("下载完成！大小{0:n0}字节，耗时{1:n0}ms", file.AsFile().Length, sw.ElapsedMilliseconds);
@@ -160,7 +185,6 @@ public class Upgrade
         var tmp = Path.GetTempPath().CombinePath(Path.GetFileNameWithoutExtension(file));
         WriteLog("解压缩更新包到临时目录 {0}", tmp);
         file.AsFile().Extract(tmp, true);
-        //throw new NotImplementedException("Extract");
 
         // 拷贝替换更新
         CopyAndReplace(tmp, DestinationPath);
@@ -190,20 +214,12 @@ public class Upgrade
     #endregion
 
     #region 辅助
-    //private HttpClient _Client;
-    //private HttpClient CreateClient()
-    //{
-    //    if (_Client != null) return _Client;
-
-    //    return _Client = new HttpClient().SetUserAgent();
-    //}
-
-    private WebClientX _Client;
-    private WebClientX CreateClient()
+    private HttpClient _Client;
+    private HttpClient CreateClient()
     {
         if (_Client != null) return _Client;
 
-        return _Client = new WebClientX();
+        return _Client = new HttpClient().SetUserAgent();
     }
 
     ///// <summary>删除备份文件</summary>
@@ -253,7 +269,6 @@ public class Upgrade
         var source = Path.GetTempPath().CombinePath(Path.GetFileNameWithoutExtension(fileName));
         WriteLog("解压缩更新包到临时目录 {0}", source);
         fileName.AsFile().Extract(source, true);
-        //throw new NotImplementedException("Extract");
 
         //var source = fileName.TrimEnd(".zip");
         //if (Directory.Exists(source)) Directory.Delete(source, true);

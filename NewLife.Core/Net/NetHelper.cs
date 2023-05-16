@@ -295,7 +295,17 @@ public static class NetHelper
             var ipp = item.GetIPProperties();
             if (ipp != null && ipp.UnicastAddresses.Count > 0)
             {
-                var gw = ipp.GatewayAddresses.Count;
+                var gw = 0;
+
+#if NET5_0_OR_GREATER
+                if (!OperatingSystem.IsAndroid())
+                {
+                    gw = ipp.GatewayAddresses.Count;
+                }
+#else
+                gw = ipp.GatewayAddresses.Count;
+#endif
+
                 foreach (var elm in ipp.UnicastAddresses)
                 {
                     try
