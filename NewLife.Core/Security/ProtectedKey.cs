@@ -149,7 +149,7 @@ public class ProtectedKey
     {
         return name.ToLowerInvariant() switch
         {
-            "aes" => Aes.Create(),
+            //"aes" => Aes.Create(),
             "des" => DES.Create(),
             "rc2" => RC2.Create(),
             "tripledes" => TripleDES.Create(),
