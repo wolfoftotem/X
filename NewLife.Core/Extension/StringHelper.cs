@@ -286,7 +286,7 @@ namespace NewLife
             var sb = Pool.StringBuilder.Get();
             if (value != null)
             {
-                if (func == null) func = obj => obj;
+                func ??= obj => obj;
                 foreach (var item in value)
                 {
                     sb.Separate(separator).Append(func(item));
@@ -317,7 +317,7 @@ namespace NewLife
             //if (value == null) return null;
             if (String.IsNullOrEmpty(value)) return new Byte[0];
 
-            if (encoding == null) encoding = Encoding.UTF8;
+            encoding ??= Encoding.UTF8;
             return encoding.GetBytes(value);
         }
 
@@ -393,6 +393,25 @@ namespace NewLife
             // 最后一组必须结尾
             return p == input.Length;
         }
+
+#if NETFRAMEWORK || NETSTANDARD2_0
+        /// <summary>Returns a value indicating whether a specified character occurs within this string.</summary>
+        /// <param name="value"></param>
+        /// <param name="inputChar">The character to seek.</param>
+        /// <returns>
+        /// <see langword="true" /> if the <paramref name="inputChar" /> parameter occurs within this string; otherwise, <see langword="false" />.</returns>
+        public static Boolean Contains(this String value, Char inputChar) => value.IndexOf(inputChar) >= 0;
+
+        /// <summary>Splits a string into substrings based on the characters in an array. You can specify whether the substrings include empty array elements.</summary>
+        /// <param name="value"></param>
+        /// <param name="separator">A character array that delimits the substrings in this string, an empty array that contains no delimiters, or <see langword="null" />.</param>
+        /// <param name="options">
+        /// <see cref="F:System.StringSplitOptions.RemoveEmptyEntries" /> to omit empty array elements from the array returned; or <see cref="F:System.StringSplitOptions.None" /> to include empty array elements in the array returned.</param>
+        /// <returns>An array whose elements contain the substrings in this string that are delimited by one or more characters in <paramref name="separator" />. For more information, see the Remarks section.</returns>
+        /// <exception cref="T:System.ArgumentException">
+        /// <paramref name="options" /> is not one of the <see cref="T:System.StringSplitOptions" /> values.</exception>
+        public static String[] Split(this String value, Char separator, StringSplitOptions options = StringSplitOptions.None) => value.Split(new Char[] { separator }, options);
+#endif
         #endregion
 
         #region 截取扩展
@@ -929,12 +948,9 @@ namespace NewLife
         //private static System.Speech.Synthesis.SpeechSynthesizer _provider;
         static void Init()
         {
-            if (_provider == null)
-            {
-                //_provider = new Speech.Synthesis.SpeechSynthesizer();
-                //_provider.SetOutputToDefaultAudioDevice();
-                _provider = new NewLife.Extension.SpeakProvider();
-            }
+            //_provider = new Speech.Synthesis.SpeechSynthesizer();
+            //_provider.SetOutputToDefaultAudioDevice();
+            _provider ??= new NewLife.Extension.SpeakProvider();
         }
 
         /// <summary>调用语音引擎说出指定话</summary>

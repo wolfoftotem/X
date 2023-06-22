@@ -240,41 +240,33 @@ public static class XTrace
     /// <summary>
     /// 禁用控制台快捷编辑，在UseConsole方法之后调用
     /// </summary>
-    public static void DisbleConsoleEdit()
+    public static void DisableConsoleEdit()
     {
         if (!_useConsole) return;
         try
         {
             if (Runtime.Windows)
             {
-                ConsoleHelper.DisbleQuickEditMode();
+                ConsoleHelper.DisableQuickEditMode();
             }
         }
-        catch
-        {
-        }
+        catch { }
     }
-
-    #endregion 控制台禁用快捷编辑
-
-    #region 控制台禁用关闭按钮
 
     /// <summary>
     /// 禁用控制台关闭按钮
     /// </summary>
     /// <param name="consoleTitle">控制台程序名称，可使用Console.Title动态设置的值</param>
-    public static void DisbleConsoleCloseBtn(string consoleTitle)
+    public static void DisableConsoleCloseButton(String consoleTitle)
     {
         try
         {
             if (Runtime.Windows)
             {
-                ConsoleHelper.DisbleCloseBtn(consoleTitle);
+                ConsoleHelper.DisableCloseButton(consoleTitle);
             }
         }
-        catch
-        {
-        }
+        catch { }
     }
 
     #endregion 控制台禁用关闭按钮
@@ -333,22 +325,22 @@ public static class XTrace
                 clg = cmp.Get<TextControlLog>();
             }
 
-            // 控制控制台日志
-            if (clg == null) clg = new TextControlLog();
-            clg.Control = control;
-            clg.MaxLines = maxLines;
+        // 控制控制台日志
+        clg ??= new TextControlLog();
+        clg.Control = control;
+        clg.MaxLines = maxLines;
 
-            if (!useFileLog)
-            {
-                Log = clg;
-                if (ftl != null) ftl.Dispose();
-            }
-            else
-            {
-                if (ftl == null) ftl = TextFileLog.Create(null);
-                Log = new CompositeLog(clg, ftl);
-            }
+        if (!useFileLog)
+        {
+            Log = clg;
+            ftl?.Dispose();
         }
+        else
+        {
+            ftl ??= TextFileLog.Create(null);
+            Log = new CompositeLog(clg, ftl);
+        }
+    }
 
         /// <summary>控件绑定到日志，生成混合日志</summary>
         /// <param name="control"></param>

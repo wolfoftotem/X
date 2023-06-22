@@ -97,8 +97,8 @@ namespace NewLife.Caching
             {
                 if (_cache.TryGetValue(key, out var item)) return (T)item.Visit();
 
-                if (ci == null) ci = new CacheItem(value, expire);
-            } while (!_cache.TryAdd(key, ci));
+            ci ??= new CacheItem(value, expire);
+        } while (!_cache.TryAdd(key, ci));
 
             Interlocked.Increment(ref _count);
 
@@ -142,8 +142,8 @@ namespace NewLife.Caching
                     return true;
                 }
 
-                if (ci == null) ci = new CacheItem(value, expire);
-            } while (!_cache.TryAdd(key, ci));
+            ci ??= new CacheItem(value, expire);
+        } while (!_cache.TryAdd(key, ci));
 
             Interlocked.Increment(ref _count);
 
@@ -225,8 +225,8 @@ namespace NewLife.Caching
             {
                 if (_cache.TryGetValue(key, out _)) return false;
 
-                if (ci == null) ci = new CacheItem(value, expire);
-            } while (!_cache.TryAdd(key, ci));
+            ci ??= new CacheItem(value, expire);
+        } while (!_cache.TryAdd(key, ci));
 
             Interlocked.Increment(ref _count);
 
@@ -254,8 +254,8 @@ namespace NewLife.Caching
                     return (T)rs;
                 }
 
-                if (ci == null) ci = new CacheItem(value, expire);
-            } while (!_cache.TryAdd(key, ci));
+            ci ??= new CacheItem(value, expire);
+        } while (!_cache.TryAdd(key, ci));
 
             Interlocked.Increment(ref _count);
 
@@ -299,8 +299,8 @@ namespace NewLife.Caching
             {
                 if (_cache.TryGetValue(key, out var item)) return (T)item.Visit();
 
-                if (ci == null) ci = new CacheItem(callback(key), expire);
-            } while (!_cache.TryAdd(key, ci));
+            ci ??= new CacheItem(callback(key), expire);
+        } while (!_cache.TryAdd(key, ci));
 
             Interlocked.Increment(ref _count);
 
@@ -415,8 +415,8 @@ namespace NewLife.Caching
             {
                 if (_cache.TryGetValue(key, out var item)) return item;
 
-                if (ci == null) ci = new CacheItem(valueFactory(key), expire);
-            } while (!_cache.TryAdd(key, ci));
+            ci ??= new CacheItem(valueFactory(key), expire);
+        } while (!_cache.TryAdd(key, ci));
 
             Interlocked.Increment(ref _count);
 
