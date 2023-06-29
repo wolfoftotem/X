@@ -54,6 +54,36 @@ public static class HttpHelper
 
         return client;
     }
+
+    /// <summary>为HttpClient创建Socket处理器，默认设置连接生命为5分钟，有效反映DNS网络更改</summary>
+    /// <remarks>
+    /// PooledConnectionLifetime 属性定义池中的最大连接生存期，从建立连接的时间跟踪其年龄，而不考虑其空闲时间或活动时间。
+    /// 在主动用于服务请求时，连接不会被拆毁。此生存期非常有用，以便定期重新建立连接，以便更好地反映 DNS 或其他网络更改。
+    /// </remarks>
+    /// <param name="useProxy">是否使用代理</param>
+    /// <param name="useCookie">是否使用Cookie</param>
+    /// <returns></returns>
+    public static HttpMessageHandler CreateHandler(Boolean useProxy, Boolean useCookie)
+    {
+#if NETCOREAPP3_0_OR_GREATER
+        var handler = new SocketsHttpHandler
+        {
+            UseProxy = useProxy,
+            UseCookies = useCookie,
+            AutomaticDecompression = DecompressionMethods.All,
+            PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+        };
+#else
+        var handler = new HttpClientHandler
+        {
+            UseProxy = useProxy,
+            UseCookies = useCookie,
+            AutomaticDecompression = DecompressionMethods.GZip
+        };
+#endif
+
+        return new DnsHttpHandler(handler);
+    }
     #endregion
 
     #region Http封包解包
