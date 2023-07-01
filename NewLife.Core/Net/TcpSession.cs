@@ -129,7 +129,7 @@ public class TcpSession : SessionBase, ISocketSession
             //    Local.Address = myAddr.GetRightAny(uri.Address.AddressFamily);
             //}
 
-            sock = Client = new(SocketType.Stream, ProtocolType.Tcp);
+            sock = Client = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             //sock.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.NoDelay, true);
             if (NoDelay) sock.NoDelay = true;
             if (timeout > 0)

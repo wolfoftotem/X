@@ -51,15 +51,16 @@ public class DnsResolver : IDnsResolver
             var source = new CancellationTokenSource(5000);
             var task = Dns.GetHostAddressesAsync(host, source.Token);
             var addrs = task.ConfigureAwait(false).GetAwaiter().GetResult();
+#elif NET20
+            var addrs = Dns.GetHostAddresses(host);
 #else
             var task = Dns.GetHostAddressesAsync(host);
             if (!task.Wait(5000)) throw new TaskCanceledException();
             var addrs = task.Result;
 #endif
+            span?.AppendTag($"addrs={addrs.Join(",")}");
             if (addrs != null && addrs.Length > 0)
             {
-                span?.AppendTag(addrs.Join(","));
-
                 // 更新缓存数据
                 if (item == null)
                     _cache[host] = item = new DnsItem
