@@ -28,11 +28,11 @@ public class Program
 #endif
         while (true)
         {
-            Stopwatch sw = new Stopwatch();
+            var sw = new Stopwatch();
             sw.Start();
             try
             {
-                Test4().Wait();
+                Test5();
             }
             catch (Exception ex)
             {
@@ -42,7 +42,7 @@ public class Program
 
             sw.Stop();
             Console.WriteLine("OK! 耗时 {0}", sw.Elapsed);
-            ConsoleKeyInfo key = Console.ReadKey(true);
+            var key = Console.ReadKey(true);
             if (key.Key != ConsoleKey.C) break;
         }
     }
@@ -158,6 +158,22 @@ public class Program
         await test.FilterTest();
     }
 
+    static void Test5()
+    {
+        var uri = new NetUri("http://sso.newlifex.com");
+        var client = uri.CreateRemote();
+        client.Log = XTrace.Log;
+        client.LogSend = true;
+        client.LogReceive = true;
+        if (client is TcpSession tcp) tcp.MaxAsync = 0;
+        client.Open();
+
+        client.Send("GET /cube/info HTTP/1.1\r\nHost: sso.newlifex.com\r\n\r\n");
+
+        var rs = client.ReceiveString();
+        XTrace.WriteLine(rs);
+    }
+
     private static void Test8()
     {
         XTrace.WriteLine("启动两个服务端");
@@ -230,7 +246,7 @@ public class Program
         XTrace.WriteLine("以下灰色日志为客户端日志，其它颜色为服务端日志，可通过线程ID区分");
 
         // 循环发送几次数据
-        for (int i = 0; i < 3; i++)
+        for (var i = 0; i < 3; i++)
         {
             foreach (var item in clients)
             {

@@ -5,7 +5,6 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Authentication;
 using NewLife.Caching;
-using NewLife.Collections;
 using NewLife.IP;
 using NewLife.Log;
 using NewLife.Net;
@@ -575,12 +574,15 @@ public static class NetHelper
             {
                 NetType.Tcp => new TcpSession { Remote = remote },
                 NetType.Udp => new UdpServer { Remote = remote },
-#if !NET40
+#if NET20
+                NetType.Http => new TcpSession { Remote = remote, SslProtocol = remote.Port == 443 ? SslProtocols.Default : SslProtocols.None },
+                NetType.WebSocket => new TcpSession { Remote = remote, SslProtocol = remote.Port == 443 ? SslProtocols.Default : SslProtocols.None },
+#else
                 NetType.Http => new TcpSession { Remote = remote, SslProtocol = remote.Port == 443 ? SslProtocols.Tls12 : SslProtocols.None },
                 NetType.WebSocket => new TcpSession { Remote = remote, SslProtocol = remote.Port == 443 ? SslProtocols.Tls12 : SslProtocols.None },
 #endif
                 _ => throw new NotSupportedException($"不支持{remote.Type}协议"),
             };
     }
-    #endregion
+#endregion
 }
