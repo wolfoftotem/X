@@ -10,8 +10,9 @@ using NewLife.Log;
 using NewLife.Net;
 using NewLife.Security;
 using NewLife.Serialization;
-using NewLife;
-using System.Threading.Tasks;
+using NewLife.Threading;
+using Stardust;
+using Stardust.Models;
 
 namespace Test;
 
@@ -26,19 +27,21 @@ public class Program
 #if DEBUG
         XTrace.Debug = true;
 #endif
-        while (true)
-        {
-            var sw = new Stopwatch();
-            sw.Start();
-            try
+            while (true)
             {
-                Test5();
-            }
-            catch (Exception ex)
-            {
-                ex = ex.GetTrue();
-                XTrace.WriteException(ex);
-            }
+                var sw = Stopwatch.StartNew();
+#if !DEBUG
+                try
+                {
+#endif
+                Test3();
+#if !DEBUG
+                }
+                catch (Exception ex)
+                {
+                    XTrace.WriteException(ex?.GetTrue());
+                }
+#endif
 
             sw.Stop();
             Console.WriteLine("OK! 耗时 {0}", sw.Elapsed);
@@ -77,7 +80,28 @@ public class Program
         server.SessionLog = null;
         server.Start();
 
-        var html = "新生命开发团队";
+            var set = StarSetting.Current;
+            set.Debug = true;
+            var local = new LocalStarClient { Log = XTrace.Log };
+            var info = local.GetInfo();
+            XTrace.WriteLine("Info: {0}", info?.ToJson());
+
+            var client3 = new ApiClient("udp://localhost:5500")
+            {
+                Timeout = 3_000,
+                Log = XTrace.Log,
+                EncoderLog = XTrace.Log,
+            };
+            info = client3.Invoke<AgentInfo>("info");
+            XTrace.WriteLine("Info: {0}", info?.ToJson());
+
+            var uri = new NetUri("http://sso.newlifex.com");
+            var client = uri.CreateRemote();
+            client.Log = XTrace.Log;
+            client.LogSend = true;
+            client.LogReceive = true;
+            if (client is TcpSession tcp) tcp.MaxAsync = 0;
+            client.Open();
 
         var sb = new StringBuilder();
         sb.AppendLine("HTTP/1.1 200 OK");
