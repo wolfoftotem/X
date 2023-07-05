@@ -34,7 +34,7 @@ public class Program
                 try
                 {
 #endif
-                Test3();
+                    Test3();
 #if !DEBUG
                 }
                 catch (Exception ex)
@@ -79,6 +79,16 @@ public class Program
         server.SocketLog = null;
         server.SessionLog = null;
         server.Start();
+
+            XTrace.WriteLine("hello");
+            Task.Run(() =>
+            {
+                XTrace.WriteLine("222");
+                Task.Run(() =>
+                {
+                    XTrace.WriteLine("333");
+                });
+            });
 
             var set = StarSetting.Current;
             set.Debug = true;
