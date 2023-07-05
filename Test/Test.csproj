@@ -12,11 +12,6 @@
     <NoWarn>1701;1702;NU5104;NETSDK1138;CS7035</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Remove="Entity\**" />
-    <EmbeddedResource Remove="Entity\**" />
-    <None Remove="Entity\**" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\NewLife.Core\NewLife.Core.csproj" />
   </ItemGroup>
 </Project>
